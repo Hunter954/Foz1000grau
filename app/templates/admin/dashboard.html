@@ -1,0 +1,123 @@
+{% extends 'admin/layout.html' %}
+{% block admin_title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Resumo do portal, atalhos operacionais e áreas principais do administrativo.{% endblock %}
+{% block admin_content %}
+<section class="stats-grid">
+  <article class="stat-card"><span>Pageviews totais</span><strong>{{ stats.pv_total }}</strong><small>Últimas 24h: {{ stats.pv_24h }}</small></article>
+  <article class="stat-card"><span>Total de matérias</span><strong>{{ stats.posts_total }}</strong><small>{{ stats.local_posts }} locais / {{ stats.wp_posts }} WordPress</small></article>
+  <article class="stat-card"><span>Categorias</span><strong>{{ stats.categories_total }}</strong><small>Organização editorial</small></article>
+  <article class="stat-card"><span>Slots ativos</span><strong>{{ stats.active_ads }}</strong><small>Monetização e mídia</small></article>
+</section>
+
+<section class="admin-grid-2">
+  <div class="panel-card">
+    <div class="panel-head">
+      <div>
+        <h2>Ações rápidas</h2>
+        <p>Fluxo principal de administração.</p>
+      </div>
+    </div>
+    <div class="quick-actions">
+      <a class="quick-action" href="{{ url_for('admin.posts_new') }}"><i class="bi bi-plus-circle"></i><span>Nova matéria</span></a>
+      <a class="quick-action" href="{{ url_for('admin.categories_new') }}"><i class="bi bi-tag"></i><span>Nova categoria</span></a>
+      <a class="quick-action" href="{{ url_for('admin.media_library') }}"><i class="bi bi-upload"></i><span>Enviar arquivos</span></a>
+      <a class="quick-action" href="{{ url_for('admin.settings_page') }}"><i class="bi bi-sliders"></i><span>Ajustar branding</span></a>
+      <a class="quick-action" href="{{ url_for('admin.insights_page') }}"><i class="bi bi-graph-up-arrow"></i><span>Ver insights</span></a>
+    </div>
+    <form method="post" action="{{ url_for('admin.sync_wp_now') }}" class="sync-box">
+      <div>
+        <strong>Sincronizar WordPress</strong>
+        <div class="text-muted small">Importa categorias e matérias externas sem afetar a home visual.</div>
+      </div>
+      <button class="btn btn-dark" type="submit">Rodar sincronização</button>
+    </form>
+  </div>
+
+  <div class="panel-card">
+    <div class="panel-head">
+      <div>
+        <h2>Identidade e AO VIVO</h2>
+        <p>Logo, nome do portal e embed da câmera/stream.</p>
+      </div>
+    </div>
+    <form class="vstack gap-3" method="post" action="{{ url_for('admin.save_logo') }}" enctype="multipart/form-data">
+      <div>
+        <label class="form-label">Nome do site</label>
+        <input class="form-control" name="site_name" value="{{ site_name }}">
+      </div>
+      <div>
+        <label class="form-label">Logo por link</label>
+        <input class="form-control" name="logo_url" placeholder="https://.../logo.png" value="{{ logo_url }}">
+      </div>
+      <div>
+        <label class="form-label">ou enviar arquivo</label>
+        <input class="form-control" type="file" name="logo_file" accept=".png,.jpg,.jpeg,.webp,.svg,.gif">
+      </div>
+      <div class="d-flex justify-content-end"><button class="btn btn-dark" type="submit">Salvar identidade</button></div>
+    </form>
+    <hr>
+    <form method="post" action="{{ url_for('admin.save_live') }}">
+      <label class="form-label">Embed AO VIVO</label>
+      <textarea class="form-control" name="live_embed_html" rows="5" placeholder="Cole iframe ou script do AO VIVO">{{ live_embed }}</textarea>
+      <div class="d-flex justify-content-end mt-3"><button class="btn btn-outline-dark" type="submit">Salvar AO VIVO</button></div>
+    </form>
+  </div>
+</section>
+
+<section class="admin-grid-2">
+  <div class="panel-card">
+    <div class="panel-head"><div><h2>Últimas matérias</h2><p>Últimas atualizações e publicações.</p></div><a class="btn btn-sm btn-outline-dark" href="{{ url_for('admin.posts_list') }}">Ver tudo</a></div>
+    <div class="table-responsive">
+      <table class="table admin-table align-middle">
+        <thead><tr><th>Título</th><th>Origem</th><th>Publicação</th><th></th></tr></thead>
+        <tbody>
+          {% for post in stats.recent_posts %}
+          <tr>
+            <td><strong>{{ post.title }}</strong><div class="text-muted small">/{{ post.slug }}</div></td>
+            <td><span class="badge rounded-pill text-bg-{% if post.source == 'local' %}dark{% else %}secondary{% endif %}">{{ post.source }}</span></td>
+            <td>{{ format_date_br(post.published_at) if post.published_at else '—' }}</td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-dark" href="{{ url_for('admin.posts_edit', post_id=post.id) }}">Editar</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center text-muted py-4">Nenhuma matéria encontrada.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel-card" id="ads">
+    <div class="panel-head"><div><h2>Publicidade</h2><p>Abra o editor visual para gerenciar banners por espaço do site, sem colar código.</p></div><a class="btn btn-sm btn-dark" href="{{ url_for('admin.ads_editor') }}">Abrir editor visual</a></div>
+    <div class="table-responsive">
+      <table class="table admin-table align-middle">
+        <thead><tr><th>Local</th><th>Nome</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          {% for s in slots %}
+          <tr>
+            <td><code>{{ s.key }}</code></td>
+            <td>{{ s.name }}</td>
+            <td>{% if s.is_active %}<span class="badge text-bg-success">Ativo</span>{% else %}<span class="badge text-bg-secondary">Off</span>{% endif %}</td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-dark" href="{{ url_for('admin.ads_manage', slot_id=s.id) }}">Gerenciar</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="panel-card">
+  <div class="panel-head"><div><h2>Biblioteca recente</h2><p>Arquivos enviados para o volume persistente do Railway.</p></div><a class="btn btn-sm btn-outline-dark" href="{{ url_for('admin.media_library') }}">Abrir biblioteca</a></div>
+  <div class="media-mini-grid">
+    {% for file in media_files %}
+      <div class="media-mini-card">
+        <a href="{{ file.url }}" target="_blank" rel="noopener">{{ file.name }}</a>
+        <small>{{ file.size_kb }} KB</small>
+      </div>
+    {% else %}
+      <div class="text-muted">Nenhum arquivo enviado ainda.</div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

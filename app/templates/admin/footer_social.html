@@ -1,0 +1,46 @@
+{% extends 'admin/layout.html' %}
+{% block admin_title %}Rodapé e redes sociais{% endblock %}
+{% block page_title %}Rodapé e redes sociais{% endblock %}
+{% block page_subtitle %}Ajuste os textos, links do menu do rodapé e os links das redes sociais do site.{% endblock %}
+{% block admin_content %}
+<form method="post" action="{{ url_for('admin.save_footer_social') }}">
+  <section class="admin-grid-2">
+    <div class="panel-card">
+      <div class="panel-head"><div><h2>Menu do rodapé</h2><p>Edite os 3 links principais que aparecem no rodapé público.</p></div></div>
+      <div class="vstack gap-3">
+        <div class="row g-3">
+          <div class="col-md-6"><label class="form-label">Texto 1</label><input class="form-control" name="footer_contact_label" value="{{ footer_contact_label }}"></div>
+          <div class="col-md-6"><label class="form-label">Link 1</label><input class="form-control" name="footer_contact_url" value="{{ footer_contact_url }}" placeholder="https://..."></div>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6"><label class="form-label">Texto 2</label><input class="form-control" name="footer_privacy_label" value="{{ footer_privacy_label }}"></div>
+          <div class="col-md-6"><label class="form-label">Link 2</label><input class="form-control" name="footer_privacy_url" value="{{ footer_privacy_url }}" placeholder="https://..."></div>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6"><label class="form-label">Texto 3</label><input class="form-control" name="footer_terms_label" value="{{ footer_terms_label }}"></div>
+          <div class="col-md-6"><label class="form-label">Link 3</label><input class="form-control" name="footer_terms_url" value="{{ footer_terms_url }}" placeholder="https://..."></div>
+        </div>
+        <div><label class="form-label">Texto dos direitos reservados</label><input class="form-control" name="footer_copyright_text" value="{{ footer_copyright_text }}"></div>
+      </div>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-head"><div><h2>Social media</h2><p>Cadastre os links públicos que vão alimentar os ícones do rodapé.</p></div></div>
+      <div class="vstack gap-3">
+        <div><label class="form-label">Título da coluna social</label><input class="form-control" name="footer_social_label" value="{{ footer_social_label }}"></div>
+        <div class="row g-3">
+          <div class="col-md-6"><label class="form-label">Facebook</label><input class="form-control" name="facebook_url" value="{{ facebook_url }}" placeholder="https://facebook.com/..."></div>
+          <div class="col-md-6"><label class="form-label">Instagram</label><input class="form-control" name="instagram_url" value="{{ instagram_url }}" placeholder="https://instagram.com/..."></div>
+          <div class="col-md-6"><label class="form-label">X / Twitter</label><input class="form-control" name="x_url" value="{{ x_url }}" placeholder="https://x.com/..."></div>
+          <div class="col-md-6"><label class="form-label">YouTube</label><input class="form-control" name="youtube_url" value="{{ youtube_url }}" placeholder="https://youtube.com/..."></div>
+        </div>
+        <div class="alert alert-light border mb-0">Deixe um campo vazio caso não queira mostrar aquele ícone no rodapé.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="d-flex justify-content-end mt-3">
+    <button class="btn btn-dark" type="submit">Salvar rodapé e redes sociais</button>
+  </div>
+</form>
+{% endblock %}

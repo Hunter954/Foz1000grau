@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block content %}
+{% set hero = lead_post %}
+{% set hero_cards = latest_queue[:3] %}
+{% set section = category_sections[0] if category_sections else None %}
+{% set section_posts = section.posts if section and section.posts else (selected_posts if selected_posts else []) %}
+{% set section_feature = section_posts[0] if section_posts else None %}
+{% set section_list = section_posts[1:5] if section_posts|length > 1 else [] %}
+{% set hero_category = hero.categories[0].name if hero and hero.categories else 'Política' %}
+
+<section class="f1000-home">
+  <div class="f1000-divider"></div>
+
+  {% if hero %}
+  <section class="f1000-hero">
+    <article class="f1000-hero__copy">
+      <div class="story-meta-row story-meta-row--stack">
+        <span class="tag tag--violet">{{ display_category_name(hero_category)|upper }}</span>
+      </div>
+      <a class="f1000-link-block" href="{{ url_for('site.post', slug=hero.slug) }}">
+        <h1>{{ clean_text(hero.title, 120) }}</h1>
+        <p>{{ clean_text(hero.excerpt or hero.content_html, 210) }}</p>
+      </a>
+    </article>
+
+    <a class="f1000-hero__media" href="{{ url_for('site.post', slug=hero.slug) }}">
+      <div class="thumb-card-image f1000-hero__image" style="background-image:url('{{ hero.featured_image or '' }}')"></div>
+    </a>
+  </section>
+  {% endif %}
+
+  <section class="f1000-card-grid">
+    {% for p in hero_cards %}
+    <a class="f1000-mini-card" href="{{ url_for('site.post', slug=p.slug) }}">
+      <div class="thumb-card-image f1000-mini-card__image" style="background-image:url('{{ p.featured_image or '' }}')"></div>
+      <div class="f1000-mini-card__meta">
+        <span class="tag tag--violet">{{ display_category_name(p.categories[0].name if p.categories else 'Cidade')|upper }}</span>
+        <span class="date-label">{{ format_date_br(p.published_at) }}</span>
+      </div>
+      <h3>{{ clean_text(p.title, 72) }}</h3>
+      <p>{{ clean_text(p.excerpt or p.content_html, 140) }}</p>
+    </a>
+    {% endfor %}
+  </section>
+
+  <div class="f1000-band">
+    {% if ad_home_middle %}
+      <div class="ad-box">{{ ad_home_middle|safe }}</div>
+    {% else %}
+      <div class="ad-placeholder banner-wide" aria-hidden="true"></div>
+    {% endif %}
+  </div>
+
+  <section class="f1000-editorial" data-rotative>
+    <div class="f1000-editorial__main">
+      <div class="f1000-section-head">
+        <h2 class="rotative-title">{{ section.category.name if section else (selected_cat.name if selected_cat else 'Cidade') }}</h2>
+        <div class="f1000-section-controls">
+          <button type="button" class="rotative-arrow" data-rotative-prev aria-label="Categoria anterior">‹</button>
+          <button type="button" class="rotative-arrow" data-rotative-next aria-label="Próxima categoria">›</button>
+        </div>
+      </div>
+
+      <div class="rotative-track" data-rotative-track>
+        {% for section_item in category_sections if category_sections %}
+        {% set posts = section_item.posts if section_item.posts else [] %}
+        {% set item_feature = posts[0] if posts else None %}
+        {% set item_list = posts[1:5] if posts|length > 1 else [] %}
+        <article class="rotative-panel f1000-editorial__panel" data-title="{{ section_item.category.name }}">
+          <div class="f1000-editorial__grid">
+            <div class="f1000-editorial__feature">
+              {% if item_feature %}
+                <a class="f1000-editorial__feature-image-link" href="{{ url_for('site.post', slug=item_feature.slug) }}">
+                  <div class="thumb-card-image f1000-editorial__feature-image" style="background-image:url('{{ item_feature.featured_image or '' }}')"></div>
+                </a>
+                <a class="f1000-link-block" href="{{ url_for('site.post', slug=item_feature.slug) }}">
+                  <div class="f1000-mini-card__meta">
+                    <span class="tag tag--violet">{{ display_category_name(item_feature.categories[0].name if item_feature.categories else section_item.category.name)|upper }}</span>
+                    <span class="date-label">{{ format_date_br(item_feature.published_at) }}</span>
+                  </div>
+                  <h3 class="f1000-editorial__feature-title">{{ clean_text(item_feature.title, 90) }}</h3>
+                  <p>{{ clean_text(item_feature.excerpt or item_feature.content_html, 170) }}</p>
+                </a>
+              {% endif %}
+            </div>
+
+            <div class="f1000-editorial__list">
+              {% for p in item_list %}
+              <a class="f1000-editorial__list-item" href="{{ url_for('site.post', slug=p.slug) }}">
+                <div class="f1000-mini-card__meta">
+                  <span class="tag tag--violet">{{ display_category_name(p.categories[0].name if p.categories else section_item.category.name)|upper }}</span>
+                  <span class="date-label">{{ format_date_br(p.published_at) }}</span>
+                </div>
+                <h3>{{ clean_text(p.title, 70) }}</h3>
+              </a>
+              {% endfor %}
+            </div>
+          </div>
+        </article>
+        {% else %}
+        <article class="rotative-panel f1000-editorial__panel" data-title="{{ selected_cat.name if selected_cat else 'Política' }}">
+          <div class="f1000-editorial__grid">
+            <div class="f1000-editorial__feature">
+              {% if section_feature %}
+                <a class="f1000-editorial__feature-image-link" href="{{ url_for('site.post', slug=section_feature.slug) }}">
+                  <div class="thumb-card-image f1000-editorial__feature-image" style="background-image:url('{{ section_feature.featured_image or '' }}')"></div>
+                </a>
+                <a class="f1000-link-block" href="{{ url_for('site.post', slug=section_feature.slug) }}">
+                  <div class="f1000-mini-card__meta">
+                    <span class="tag tag--violet">{{ display_category_name(section_feature.categories[0].name if section_feature.categories else 'Cidade')|upper }}</span>
+                    <span class="date-label">{{ format_date_br(section_feature.published_at) }}</span>
+                  </div>
+                  <h3 class="f1000-editorial__feature-title">{{ clean_text(section_feature.title, 90) }}</h3>
+                  <p>{{ clean_text(section_feature.excerpt or section_feature.content_html, 170) }}</p>
+                </a>
+              {% endif %}
+            </div>
+            <div class="f1000-editorial__list">
+              {% for p in section_list %}
+              <a class="f1000-editorial__list-item" href="{{ url_for('site.post', slug=p.slug) }}">
+                <div class="f1000-mini-card__meta">
+                  <span class="tag tag--violet">{{ display_category_name(p.categories[0].name if p.categories else 'Cidade')|upper }}</span>
+                  <span class="date-label">{{ format_date_br(p.published_at) }}</span>
+                </div>
+                <h3>{{ clean_text(p.title, 70) }}</h3>
+              </a>
+              {% endfor %}
+            </div>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </div>
+
+    <aside class="f1000-editorial__side">
+      <div class="f1000-section-head f1000-section-head--widgets">
+        <h2>Widgets</h2>
+      </div>
+
+      <div class="f1000-widget-card weather-box" id="meteorologia">
+        <div class="weather-widget-embed weather-widget-embed--compact">
+          <div id="ww_1bb7819669dab" v='1.3' loc='id' a='{"t":"horizontal","lang":"pt","sl_lpl":1,"ids":["wl4952"],"font":"Arial","sl_ics":"one_a","sl_sot":"celsius","cl_bkg":"rgba(246,213,0,1)","cl_font":"#000000","cl_cloud":"#000000","cl_persp":"#000000","cl_sun":"#000000","cl_moon":"#000000","cl_thund":"#000000"}'>Mais previsões: <a href="https://tempolongo.com/rio_de_janeiro_tempo_25_dias/" id="ww_1bb7819669dab_u" target="_blank">Weather Rio de Janeiro 30 days</a></div>
+        </div>
+      </div>
+      <script async src="https://app3.weatherwidget.org/js/?id=ww_1bb7819669dab"></script>
+
+      <div class="f1000-widget-card f1000-widget-card--ad">
+        {% if ad_sidebar_1 %}
+          <div class="ad-box">{{ ad_sidebar_1|safe }}</div>
+        {% else %}
+          <div class="ad-placeholder ad-placeholder--square" aria-hidden="true"></div>
+        {% endif %}
+      </div>
+    </aside>
+  </section>
+
+  <div class="f1000-band f1000-band--bottom">
+    {% if ad_home_bottom %}
+      <div class="ad-box">{{ ad_home_bottom|safe }}</div>
+    {% else %}
+      <div class="ad-placeholder banner-wide" aria-hidden="true"></div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends 'admin/layout.html' %}
+{% block admin_title %}Publicidade{% endblock %}
+{% block page_title %}{% if mode=='new' %}Novo slot de anúncio{% else %}Editar slot de anúncio{% endif %}{% endblock %}
+{% block page_subtitle %}Gestão comercial com HTML livre, imagem por link ou upload para volume.{% endblock %}
+{% block admin_content %}
+<section class="panel-card form-narrow-wide">
+  <form method="post" enctype="multipart/form-data">
+    {{ form.csrf_token }}
+    <div class="row g-3">
+      <div class="col-md-4"><label class="form-label">Key</label>{{ form.key(class='form-control') }}</div>
+      <div class="col-md-6"><label class="form-label">Nome</label>{{ form.name(class='form-control') }}</div>
+      <div class="col-md-2 d-flex align-items-end"><div class="form-check">{{ form.is_active(class='form-check-input') }} <label class="form-check-label">Ativo</label></div></div>
+      <div class="col-md-6"><label class="form-label">Imagem por link</label>{{ form.image_url(class='form-control', placeholder='https://.../banner.png') }}</div>
+      <div class="col-md-6"><label class="form-label">Link do clique</label>{{ form.link_url(class='form-control', placeholder='https://anunciante.com') }}</div>
+      <div class="col-md-6"><label class="form-label">Imagem por arquivo</label>{{ form.image_file(class='form-control') }}</div>
+      <div class="col-12"><label class="form-label">HTML do anúncio</label>{{ form.html(class='form-control editor-area', rows='12') }}</div>
+    </div>
+    <div class="d-flex gap-2 mt-4">
+      <button class="btn btn-dark" type="submit">Salvar slot</button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('admin.dashboard') }}#ads">Voltar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
