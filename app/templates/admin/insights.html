@@ -23,6 +23,13 @@
       {% endif %}
     </small>
   </article>
+  {% if card.key == 'total_users' %}
+  <article class="stat-card">
+    <span>Pageviews totais</span>
+    <strong>{{ dashboard_stats.pv_total }}</strong>
+    <small>Últimas 24h: {{ dashboard_stats.pv_24h }}</small>
+  </article>
+  {% endif %}
   {% endfor %}
 </section>
 
