@@ -919,15 +919,27 @@ def insights_page():
         selected_metric = "sessions"
 
     metric_chart = _build_chart_data(insights["daily_series"], selected_metric)
+    dashboard_stats = _dashboard_stats()
     visible_cards = []
     for card in insights["cards"]:
         if card.get("key") not in {"sessions", "pageviews", "total_users"}:
             continue
         card_data = dict(card)
-        card_data["is_total"] = card.get("key") == "pageviews"
-        if card_data["is_total"]:
-            card_data["context_value"] = _dashboard_stats().get("pv_24h", 0)
+        if card.get("key") == "pageviews":
+            card_data["label"] = "Pageviews totais"
+            card_data["is_total"] = True
+        else:
+            card_data["is_total"] = False
         visible_cards.append(card_data)
+
+    visible_cards.append({
+        "key": "pageviews_24h",
+        "label": "Últimas 24h",
+        "value": dashboard_stats.get("pv_24h", 0),
+        "delta": 0,
+        "is_context_only": True,
+        "help_text": "Pageviews acumulados nas últimas 24 horas.",
+    })
 
     return render_template(
         "admin/insights.html",
