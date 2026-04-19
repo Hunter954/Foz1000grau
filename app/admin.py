@@ -805,18 +805,21 @@ def posts_delete(post_id):
     if r:
         return r
     post = Post.query.get_or_404(post_id)
-    if post.source != 'local':
-        flash('Somente matérias locais podem ser excluídas por aqui.', 'warning')
-        return redirect(url_for('admin.posts_edit', post_id=post.id))
-    image = post.featured_image or ''
-    db.session.execute(post_categories.delete().where(post_categories.c.post_id == post.id))
-    PageView.query.filter_by(post_id=post.id).delete(synchronize_session=False)
-    db.session.delete(post)
-    db.session.commit()
-    if image:
+    image = (post.featured_image or '').strip()
+    redirect_target = url_for('admin.posts_list')
+    try:
+        db.session.execute(post_categories.delete().where(post_categories.c.post_id == post.id))
+        PageView.query.filter_by(post_id=post.id).delete(synchronize_session=False)
+        db.session.delete(post)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash('Não foi possível excluir a matéria.', 'danger')
+        return redirect(request.referrer or redirect_target)
+    if image and image.startswith('/media/'):
         _delete_local_media(image)
     flash('Matéria excluída com sucesso.', 'success')
-    return redirect(url_for('admin.posts_list'))
+    return redirect(redirect_target)
 
 
 def _wp_stats():
@@ -919,27 +922,15 @@ def insights_page():
         selected_metric = "sessions"
 
     metric_chart = _build_chart_data(insights["daily_series"], selected_metric)
-    dashboard_stats = _dashboard_stats()
     visible_cards = []
     for card in insights["cards"]:
         if card.get("key") not in {"sessions", "pageviews", "total_users"}:
             continue
         card_data = dict(card)
-        if card.get("key") == "pageviews":
-            card_data["label"] = "Pageviews totais"
-            card_data["is_total"] = True
-        else:
-            card_data["is_total"] = False
+        card_data["is_total"] = card.get("key") == "pageviews"
+        if card_data["is_total"]:
+            card_data["context_value"] = _dashboard_stats().get("pv_24h", 0)
         visible_cards.append(card_data)
-
-    visible_cards.append({
-        "key": "pageviews_24h",
-        "label": "Últimas 24h",
-        "value": dashboard_stats.get("pv_24h", 0),
-        "delta": 0,
-        "is_context_only": True,
-        "help_text": "Pageviews acumulados nas últimas 24 horas.",
-    })
 
     return render_template(
         "admin/insights.html",

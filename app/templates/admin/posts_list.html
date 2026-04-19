@@ -12,7 +12,7 @@
   </form>
   <div class="table-responsive">
     <table class="table admin-table align-middle">
-      <thead><tr><th>Título</th><th>Categorias</th><th>Origem</th><th>Status</th><th>Publicação</th><th></th></tr></thead>
+      <thead><tr><th>Título</th><th>Categorias</th><th>Origem</th><th>Status</th><th>Publicação</th><th class="text-end">Ações</th></tr></thead>
       <tbody>
         {% for post in posts %}
         <tr>
@@ -27,14 +27,12 @@
           <td><span class="badge rounded-pill {% if not post.published_at %}text-bg-warning{% elif post.published_at > now_utc %}text-bg-info{% else %}text-bg-success{% endif %}">{% if not post.published_at %}Rascunho{% elif post.published_at > now_utc %}Agendada{% else %}Publicada{% endif %}</span></td>
           <td>{{ format_date_br(post.published_at) if post.published_at else '—' }}</td>
           <td class="text-end">
-            <div class="d-inline-flex gap-2 flex-wrap justify-content-end align-items-center">
+            <div class="d-inline-flex gap-2 flex-wrap justify-content-end">
               <a class="btn btn-sm btn-outline-dark" href="{{ url_for('admin.posts_edit', post_id=post.id) }}">Editar</a>
               {% if post.published_at and post.published_at <= now_utc %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('site.post', slug=post.slug) }}" target="_blank" rel="noopener">Ver</a>{% endif %}
-              {% if post.source == 'local' %}
-              <form method="post" action="{{ url_for('admin.posts_delete', post_id=post.id) }}" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir esta matéria?');">
-                <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
+              <form class="d-inline-block m-0" method="post" action="{{ url_for('admin.posts_delete', post_id=post.id) }}" onsubmit="return confirm('Tem certeza que deseja excluir esta matéria?');">
+                <button class="btn btn-sm btn-danger" type="submit">Excluir matéria</button>
               </form>
-              {% endif %}
             </div>
           </td>
         </tr>
