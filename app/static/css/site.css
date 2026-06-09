@@ -1144,7 +1144,22 @@ img{max-width:100%;display:block}
 .weather-widget-embed{
   background:#3901db !important;
 }
-.site-footer,
+.footer-credit--f1000{
+  background:#3901db !important;
+  color:#fff !important;
+}
+.footer-credit--f1000 a,
+.footer-credit__inner,
+.footer-credit__inner span{
+  color:#fff !important;
+}
+
+
+/* final correction: only the developer credit bar is purple, not the whole footer */
+.site-footer{
+  background:#e2e2e2 !important;
+  color:#111 !important;
+}
 .footer-credit--f1000{
   background:#3901db !important;
   color:#fff !important;
