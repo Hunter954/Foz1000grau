@@ -28,7 +28,7 @@ img{max-width:100%;display:block}
 .main-nav{display:flex;align-items:center;gap:20px;flex-wrap:nowrap;min-width:0}
 .nav-link{text-decoration:none;text-transform:uppercase;font-size:14px;font-weight:900;letter-spacing:.01em;white-space:nowrap;padding:0}
 .nav-link:hover{opacity:.75}
-.live-chip{background:var(--accent);color:#fff;text-decoration:none;border-radius:999px;padding:8px 16px;font-size:12px;font-weight:900;text-transform:uppercase;line-height:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;min-width:146px;white-space:nowrap;text-align:center}
+.live-chip{background:var(--accent);color:#fff;text-decoration:none;border:0;border-radius:999px;padding:8px 16px;font-size:12px;font-weight:900;text-transform:uppercase;line-height:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;min-width:146px;white-space:nowrap;text-align:center;cursor:pointer}
 .live-chip__icon,.live-chip__label{display:inline-flex;align-items:center;justify-content:center;line-height:1}
 .live-chip__icon{flex:0 0 auto}
 .live-chip__label{transform:translateY(-.5px)}
@@ -752,6 +752,9 @@ img{max-width:100%;display:block}
 .f1000-search{width:164px;height:36px;border-radius:999px;background:#ffffff;display:flex;align-items:center;gap:8px;padding:0 12px;border:1px solid rgba(51,7,214,.12);}
 .f1000-search i{font-size:13px;color:#9a9a9a;}
 .f1000-search input{width:100%;border:0;outline:0;background:transparent;font-size:12px;color:#666;}
+.f1000-top-actions{flex:0 0 auto;display:flex;align-items:center;justify-content:flex-end;gap:10px;}
+.desktop-live-chip{min-height:36px;min-width:142px;padding:0 14px;background:#3901db;color:#fff;box-shadow:none;}
+.desktop-live-chip:hover{opacity:.9;}
 .brand-row{grid-template-columns:154px minmax(0,1fr);gap:28px;}
 .brand img{max-height:104px;}
 .brand-text{font-size:28px;line-height:.86;letter-spacing:-.045em;}
@@ -880,7 +883,7 @@ img{max-width:100%;display:block}
 
 
 /* foz1000grau footer/category/ad color fix */
-.tag{background:#f6d500 !important;color:#111 !important;}
+.tag{background:#3901db !important;color:#fff !important;}
 .ad-placeholder,
 .ad-placeholder--square,
 .ad-placeholder--tall,

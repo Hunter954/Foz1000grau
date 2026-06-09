@@ -124,10 +124,17 @@
           {% endfor %}
         </nav>
 
-        <form class="f1000-search" action="{{ url_for('site.search') }}" method="get" role="search">
-          <i class="bi bi-search" aria-hidden="true"></i>
-          <input type="search" name="q" placeholder="Buscar..." value="{{ request.args.get('q', '') }}" aria-label="Buscar">
-        </form>
+        <div class="header-top-actions f1000-top-actions">
+          <form class="f1000-search" action="{{ url_for('site.search') }}" method="get" role="search">
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <input type="search" name="q" placeholder="Buscar..." value="{{ request.args.get('q', '') }}" aria-label="Buscar">
+          </form>
+
+          <button class="live-chip desktop-live-chip" type="button" aria-label="Abrir câmera ao vivo" data-livecam-open>
+            <span class="live-chip__icon"><i class="bi bi-camera-video-fill" aria-hidden="true"></i></span>
+            <span class="live-chip__label">Câmera ao vivo</span>
+          </button>
+        </div>
       </div>
 
       <div class="brand-row brand-row--f1000">
