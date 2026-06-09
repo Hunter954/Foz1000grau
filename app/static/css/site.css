@@ -4,10 +4,10 @@
   --surface-soft:#cfcfcf;
   --text:#0d0d0d;
   --muted:#5d5d5d;
-  --line:#3307d6;
-  --accent:#3307d6;
-  --ad:#3307d6;
-  --weather:#3307d6;
+  --line:#3901db;
+  --accent:#3901db;
+  --ad:#3901db;
+  --weather:#3901db;
   --radius:18px;
   --container:1160px;
   --font-main:"Axiforma","Avenir Next","Montserrat",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -891,16 +891,16 @@ img{max-width:100%;display:block}
 .header-banner--f1000 .ad-placeholder,
 .f1000-band .ad-placeholder,
 .ad-slot-banner--wide,
-.ad-slot-banner--square{background:#f6d500 !important;}
+.ad-slot-banner--square{background:#3901db !important;}
 .footer-credit--f1000{
   width:100vw;
   margin:0 0 0 calc(50% - 50vw) !important;
   padding:12px 24px !important;
-  background:#f6d500 !important;
-  color:#111 !important;
+  background:#3901db !important;
+  color:#fff !important;
   border-radius:0 !important;
 }
-.footer-credit--f1000 a{color:#111 !important;}
+.footer-credit--f1000 a{color:#fff !important;}
 
 
 /* restore footer credit */
@@ -987,11 +987,11 @@ img{max-width:100%;display:block}
   width:100vw;
   margin:0 0 0 calc(50% - 50vw) !important;
   padding:12px 24px !important;
-  background:#f6d500 !important;
-  color:#111 !important;
+  background:#3901db !important;
+  color:#fff !important;
   border-radius:0 !important;
 }
-.footer-credit--f1000 a{color:#111 !important;}
+.footer-credit--f1000 a{color:#fff !important;}
 .footer-credit__inner{
   display:flex;
   align-items:center;
@@ -1119,4 +1119,38 @@ img{max-width:100%;display:block}
   .f1000-mini-card__image,
   .recent-img{height:160px;}
   .f1000-editorial__feature-image{height:190px;}
+}
+
+
+/* foz1000grau purple background fix - ads, weather and footer */
+.ad-placeholder,
+.ad-placeholder--square,
+.ad-placeholder--tall,
+.footer-ad-placeholder,
+.header-banner--f1000 .ad-placeholder,
+.header-banner--f1000 .banner-wide,
+.f1000-band .ad-placeholder,
+.f1000-band .banner-wide,
+.ad-slot-banner,
+.ad-slot-banner--wide,
+.ad-slot-banner--square,
+.weather-box,
+.weather-placeholder,
+.f1000-widget-card.weather-box{
+  background:#3901db !important;
+  color:#fff !important;
+}
+.weather-box iframe,
+.weather-widget-embed{
+  background:#3901db !important;
+}
+.site-footer,
+.footer-credit--f1000{
+  background:#3901db !important;
+  color:#fff !important;
+}
+.footer-credit--f1000 a,
+.footer-credit__inner,
+.footer-credit__inner span{
+  color:#fff !important;
 }
