@@ -1,0 +1,120 @@
+{% extends "admin/layout.html" %}
+{% block admin_title %}Calendário Home{% endblock %}
+{% block page_title %}Calendário Home{% endblock %}
+{% block page_subtitle %}Escolha uma data para a home exibir as matérias publicadas até aquele dia.{% endblock %}
+
+{% block admin_content %}
+<div class="row g-4">
+  <div class="col-xl-5">
+    <div class="card border-0 shadow-sm admin-card h-100">
+      <div class="card-body p-4">
+        <div class="d-flex align-items-start justify-content-between gap-3 mb-4">
+          <div>
+            <span class="badge text-bg-dark mb-2"><i class="bi bi-calendar3-week me-1"></i>Print diário</span>
+            <h2 class="h4 mb-1">Configurar data da Home</h2>
+            <p class="text-muted mb-0">Ao ativar, o site monta a página inicial usando matérias da data escolhida para trás.</p>
+          </div>
+          <div class="rounded-4 bg-light p-3 fs-3"><i class="bi bi-house-gear"></i></div>
+        </div>
+
+        <form method="post" action="{{ url_for('admin.home_calendar_page') }}" class="vstack gap-3">
+          <label class="d-flex align-items-center gap-3 p-3 rounded-4 border bg-light-subtle" style="cursor:pointer;">
+            <input class="form-check-input m-0 fs-4" type="checkbox" name="home_calendar_enabled" value="1" {% if enabled %}checked{% endif %}>
+            <span>
+              <strong>Ativar Calendário Home</strong><br>
+              <small class="text-muted">Quando desativado, a home volta para as notícias mais recentes normalmente.</small>
+            </span>
+          </label>
+
+          <div>
+            <label class="form-label fw-semibold">Data de referência</label>
+            <input class="form-control form-control-lg" type="date" name="home_calendar_date" value="{{ selected_date_iso }}" required>
+            <div class="form-text">Exemplo: selecionando 01/06, entram matérias publicadas em 01/06 e antes disso.</div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-6">
+              <div class="p-3 rounded-4 border bg-white">
+                <div class="text-muted small">No dia escolhido</div>
+                <div class="fs-4 fw-bold">{{ post_count }}</div>
+                <div class="small text-muted">matérias</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="p-3 rounded-4 border bg-white">
+                <div class="text-muted small">Disponíveis na home</div>
+                <div class="fs-4 fw-bold">{{ total_until_count }}</div>
+                <div class="small text-muted">até {{ selected_date_label }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 pt-2">
+            <button class="btn btn-dark btn-lg" type="submit"><i class="bi bi-check2-circle me-1"></i>Salvar configuração</button>
+            <a class="btn btn-outline-dark btn-lg" href="{{ home_url }}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir home</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-7">
+    <div class="card border-0 shadow-sm admin-card mb-4">
+      <div class="card-body p-4">
+        <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+          <div>
+            <h2 class="h5 mb-1">Prévia das matérias</h2>
+            <p class="text-muted mb-0">Últimas matérias que aparecerão considerando {{ selected_date_label }} para trás.</p>
+          </div>
+          {% if enabled %}
+            <span class="badge text-bg-success">Ativo</span>
+          {% else %}
+            <span class="badge text-bg-secondary">Desativado</span>
+          {% endif %}
+        </div>
+
+        <div class="list-group list-group-flush">
+          {% for post in selected_posts %}
+            <a class="list-group-item list-group-item-action px-0 d-flex gap-3 align-items-center" href="{{ url_for('site.post', slug=post.slug) }}" target="_blank" rel="noopener">
+              <div class="rounded-3 bg-light flex-shrink-0" style="width:72px;height:54px;background-image:url('{{ post.featured_image or '' }}');background-size:cover;background-position:center;"></div>
+              <div class="min-w-0">
+                <div class="fw-semibold text-truncate">{{ post.title }}</div>
+                <small class="text-muted">{{ post.published_at.strftime('%d/%m/%Y %H:%M') if post.published_at else 'Sem data' }}</small>
+              </div>
+            </a>
+          {% else %}
+            <div class="text-muted py-4">Nenhuma matéria encontrada para essa data.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm admin-card">
+      <div class="card-body p-4">
+        <h2 class="h5 mb-3">Atalhos rápidos</h2>
+        <div class="d-flex flex-wrap gap-2">
+          {% for item in days_summary %}
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-calendar-day="{{ item.iso }}">
+              {{ item.label }} <span class="badge text-bg-light ms-1">{{ item.count }}</span>
+            </button>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.querySelectorAll('[data-calendar-day]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const input = document.querySelector('input[name="home_calendar_date"]');
+      if (input) {
+        input.value = button.dataset.calendarDay;
+        input.focus();
+      }
+    });
+  });
+</script>
+{% endblock %}
