@@ -10,7 +10,7 @@ import requests
 from flask import current_app
 from slugify import slugify
 
-from .models import db, Post, Category
+from .models import db, Post, Category, DeletedWpPost
 from .wp_client import WPClient
 
 ALLOWED_TAGS = bleach.sanitizer.ALLOWED_TAGS.union({
@@ -133,8 +133,12 @@ def sync_posts(client: WPClient, max_pages: int = 10, per_page: int = 20, downlo
         if not data:
             break
 
+        deleted_wp_ids = {row[0] for row in db.session.query(DeletedWpPost.wp_id).all()}
+
         for p in data:
             wp_id = p["id"]
+            if wp_id in deleted_wp_ids:
+                continue
             title = (p.get("title") or {}).get("rendered") or ""
             slug = p.get("slug") or slugify(title)[:200]
             excerpt = (p.get("excerpt") or {}).get("rendered") or ""

@@ -51,6 +51,18 @@ class Post(db.Model):
 
     categories = db.relationship("Category", secondary=post_categories, lazy="joined")
 
+
+class DeletedWpPost(db.Model):
+    """Registro de matérias do WordPress excluídas no painel.
+
+    Evita que a sincronização automática recrie uma matéria que o administrador
+    removeu deliberadamente do portal.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    wp_id = db.Column(db.Integer, unique=True, index=True, nullable=False)
+    deleted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
 class AdSlot(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(80), unique=True, nullable=False)  # ex: lateral_1, lateral_2, header_top

@@ -13,7 +13,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import func, desc, or_
 from werkzeug.utils import secure_filename
 
-from .models import db, User, AdSlot, SiteSetting, PageView, Post, Category, post_categories, AnalyticsSession
+from .models import db, User, AdSlot, SiteSetting, PageView, Post, Category, post_categories, AnalyticsSession, DeletedWpPost
 from .sync import download_external_image
 from .forms import LoginForm, AdSlotForm, CategoryForm, PostAdminForm
 from .wp_client import WPClient
@@ -882,18 +882,33 @@ def posts_delete(post_id):
     post = Post.query.get_or_404(post_id)
     image = (post.featured_image or '').strip()
     redirect_target = url_for('admin.posts_list')
+
+    # Envia a exclusão aos sites espelho antes de remover o objeto da sessão.
+    hub_result = _broadcast_delete_to_hub(post) if _setting_bool('hub_auto_push', True) else None
+
     try:
+        # Matérias importadas seriam recriadas pela próxima sincronização.
+        # O tombstone registra a decisão do administrador e bloqueia a reimportação.
+        if post.source == 'wp' and post.wp_id is not None:
+            tombstone = DeletedWpPost.query.filter_by(wp_id=post.wp_id).first()
+            if not tombstone:
+                db.session.add(DeletedWpPost(wp_id=post.wp_id))
+
         db.session.execute(post_categories.delete().where(post_categories.c.post_id == post.id))
         PageView.query.filter_by(post_id=post.id).delete(synchronize_session=False)
         db.session.delete(post)
         db.session.commit()
-    except Exception:
+    except Exception as exc:
         db.session.rollback()
-        flash('Não foi possível excluir a matéria.', 'danger')
+        current_app.logger.exception('Falha ao excluir matéria %s: %s', post_id, exc)
+        flash('Não foi possível excluir a matéria. Verifique os logs do sistema.', 'danger')
         return redirect(request.referrer or redirect_target)
+
     if image and image.startswith('/media/'):
         _delete_local_media(image)
     flash('Matéria excluída com sucesso.', 'success')
+    if hub_result is not None:
+        _flash_hub_result('Exclusão da matéria', hub_result)
     return redirect(redirect_target)
 
 
