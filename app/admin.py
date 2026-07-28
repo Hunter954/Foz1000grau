@@ -894,9 +894,13 @@ def posts_delete(post_id):
             if not tombstone:
                 db.session.add(DeletedWpPost(wp_id=post.wp_id))
 
+        # Remove os relacionamentos por SQL direto e exclui a matéria em massa.
+        # Não use db.session.delete(post) aqui: como categories usa lazy='joined',
+        # o SQLAlchemy mantém os vínculos carregados e tentaria apagá-los novamente,
+        # causando StaleDataError ("expected to delete 1 row; 0 were matched").
         db.session.execute(post_categories.delete().where(post_categories.c.post_id == post.id))
         PageView.query.filter_by(post_id=post.id).delete(synchronize_session=False)
-        db.session.delete(post)
+        Post.query.filter_by(id=post.id).delete(synchronize_session=False)
         db.session.commit()
     except Exception as exc:
         db.session.rollback()

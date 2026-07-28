@@ -7,7 +7,7 @@ import json
 from flask import Blueprint, render_template, abort, request, current_app, send_from_directory, jsonify, make_response, url_for
 from sqlalchemy import desc, func, or_
 
-from .models import db, Post, Category, AdSlot, SiteSetting, PageView, AnalyticsSession
+from .models import db, Post, Category, AdSlot, SiteSetting, PageView, AnalyticsSession, post_categories
 from .sync import download_external_image
 
 site_bp = Blueprint("site", __name__)
@@ -452,7 +452,11 @@ def hub_posts_delete_api():
     post = _published_posts_query().filter_by(slug=slug).first()
     if not post:
         return jsonify({'ok': True, 'deleted': False})
-    db.session.delete(post)
+    # Exclui primeiro os vínculos e depois a matéria via bulk delete para evitar
+    # que o ORM tente remover novamente associações já apagadas de post_categories.
+    db.session.execute(post_categories.delete().where(post_categories.c.post_id == post.id))
+    PageView.query.filter_by(post_id=post.id).delete(synchronize_session=False)
+    Post.query.filter_by(id=post.id).delete(synchronize_session=False)
     db.session.commit()
     return jsonify({'ok': True, 'deleted': True})
 
