@@ -253,3 +253,13 @@ def test_live_posts_have_priority_over_backfill(app,monkeypatch):
     assert processed==['2']
     media.run_one()
     assert processed==['2','1']
+
+
+def test_webp_mime_without_system_registry(app,monkeypatch):
+    monkeypatch.setattr(media.mimetypes,'guess_type',lambda _: (None,None))
+    client=enable_r2(app,monkeypatch)
+    url=media.save_upload(photo((500,300)),'photo.jpg')
+    response=app.test_client().get(url)
+    assert response.mimetype=='image/webp'
+    media.run_one()
+    assert client.upload_file.call_args.kwargs['ExtraArgs']['ContentType']=='image/webp'

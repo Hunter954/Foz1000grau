@@ -200,13 +200,13 @@ def inject_site_globals():
 @site_bp.get("/media/<path:filename>")
 def media(filename):
     media_root = Path(current_app.config["MEDIA_ROOT"]).resolve()
-    from .media import resolve_media
+    from .media import resolve_media, content_type
     target = resolve_media('/media/' + filename)
     if target != '/media/' + filename:
         response = redirect(target, code=302)
         response.headers["Cache-Control"] = "public, max-age=86400"
         return response
-    response = send_from_directory(media_root, filename, max_age=86400)
+    response = send_from_directory(media_root, filename, max_age=86400, mimetype=content_type(filename))
     return response
 
 

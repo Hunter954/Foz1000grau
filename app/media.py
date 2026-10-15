@@ -7,6 +7,7 @@ import hashlib
 import html
 import io
 import json
+import mimetypes
 import os
 import re
 import tempfile
@@ -30,6 +31,12 @@ _IMAGE_LOCK = threading.Lock()
 IMAGE_SRC = re.compile(r'(<img\b[^>]*?\bsrc=["\'])([^"\']+)(["\'])', re.I)
 MEDIA_LINK = re.compile(r'(?:(?:https?://[^\s"\'<>/]+))?/media/[^\s"\'<>?&#)]+')
 IMAGE_EXT = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tif', '.tiff', '.ico'}
+
+
+def content_type(filename):
+    # Python 3.11/minimal runtime images do not always ship a WebP MIME entry.
+    known = {'.webp': 'image/webp', '.avif': 'image/avif', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon'}
+    return known.get(Path(filename).suffix.lower()) or mimetypes.guess_type(filename)[0] or 'application/octet-stream'
 
 
 def digest(value):
@@ -115,7 +122,7 @@ def optimize(source, filename):
             # Animated ads must keep their animation. Bounded original is copied.
             if getattr(image, 'is_animated', False):
                 source.seek(0)
-                return source.read(), Path(filename).suffix.lower() or '.gif'
+                return source.read(), {'GIF': '.gif', 'WEBP': '.webp', 'PNG': '.png'}.get(image.format, Path(filename).suffix.lower() or '.gif')
             image.draft('RGB', (1280, 1280))
             image.thumbnail((current_app.config['IMAGE_MAX_EDGE'],) * 2, Image.Resampling.LANCZOS)
             image = ImageOps.exif_transpose(image)
@@ -254,10 +261,9 @@ def upload_asset(relative):
         relative_out = optimized.local_path
     else:
         relative_out = relative
-    import mimetypes
     from boto3.s3.transfer import TransferConfig
     key = 'foz1000grau/' + relative_out
-    r2_client().upload_file(str(local_path(relative_out)), current_app.config['R2_BUCKET'], key, ExtraArgs={'ContentType': mimetypes.guess_type(relative_out)[0] or 'application/octet-stream', 'CacheControl': 'public, max-age=31536000, immutable'}, Config=TransferConfig(use_threads=False, max_concurrency=1))
+    r2_client().upload_file(str(local_path(relative_out)), current_app.config['R2_BUCKET'], key, ExtraArgs={'ContentType': content_type(relative_out), 'CacheControl': 'public, max-age=31536000, immutable'}, Config=TransferConfig(use_threads=False, max_concurrency=1))
     public = current_app.config['R2_PUBLIC_URL'] + '/' + quote(key, safe='/')
     _remember(source, relative, path.stat().st_size, public)
     # Remote-source aliases share the compressed path; resolve them to R2 too.

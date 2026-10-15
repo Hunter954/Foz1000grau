@@ -50,6 +50,6 @@ Referências oficiais: https://developers.cloudflare.com/r2/pricing/ e https://d
 
 ## Validação
 
-20 testes de regressão: compressão/tamanho/deduplicação, limites de bytes/pixels, animação, isolamento da transação editorial, upload assíncrono R2, URL direta/redirect/cache, migração local e ativação posterior do R2, preservação dos originais, tentativas persistentes, capa/corpo do espelho, paginação/páginas administrativas, analytics SQL, retorno imediato do espelho, driver PostgreSQL, reenvio durante processamento, corpo de matéria não carregado em listagens, download remoto limitado/cacheado e proteção de edições concorrentes e prioridade das novas publicações.
+21 testes de regressão: compressão/tamanho/deduplicação, limites de bytes/pixels, animação, isolamento da transação editorial, upload assíncrono R2, URL direta/redirect/cache, migração local e ativação posterior do R2, preservação dos originais, tentativas persistentes, capa/corpo do espelho, paginação/páginas administrativas, analytics SQL, retorno imediato do espelho, driver PostgreSQL, reenvio durante processamento, corpo de matéria não carregado em listagens, download remoto limitado/cacheado e proteção de edições concorrentes e prioridade das novas publicações e Content-Type WebP mesmo em runtimes sem o registro MIME.
 
 A redução de RAM/custo deve ser comparada durante 24–48 horas de tráfego semelhante. O consumo inicial pode incluir migração. O banco mantém sua configuração de memória: não foi imposto um teto artificial que pudesse derrubar o serviço.
