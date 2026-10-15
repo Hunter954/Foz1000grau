@@ -58,7 +58,7 @@
             <span class="date-label">{{ format_date_br(p.published_at) }}</span>
           </div>
           <h3>{{ clean_text(p.title, 78) }}</h3>
-          <p>{{ clean_text(p.excerpt or p.content_html, 115) }}</p>
+          <p>{{ clean_text(p.excerpt or p.summary, 115) }}</p>
         </a>
         {% endfor %}
       </div>

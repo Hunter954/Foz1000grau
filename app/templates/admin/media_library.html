@@ -1,10 +1,10 @@
 {% extends 'admin/layout.html' %}
 {% block admin_title %}Mídia{% endblock %}
 {% block page_title %}Biblioteca de mídia{% endblock %}
-{% block page_subtitle %}Envie logos, capas e banners para o volume persistente do Railway e use o link direto depois.{% endblock %}
+{% block page_subtitle %}Envie imagens otimizadas para usar nas matérias e nos anúncios.{% endblock %}
 {% block admin_content %}
 <section class="panel-card">
-  <div class="panel-head"><div><h2>Upload para volume</h2><p>Os arquivos ficam salvos em <code>{{ admin_media_root }}</code>.</p></div></div>
+  <div class="panel-head"><div><h2>Enviar imagens</h2><p>As fotos são comprimidas automaticamente para a web.</p></div></div>
   <form method="post" action="{{ url_for('admin.media_upload') }}" enctype="multipart/form-data" class="upload-box">
     <input class="form-control" type="file" name="files" multiple>
     <button class="btn btn-dark" type="submit">Enviar arquivos</button>
@@ -20,15 +20,15 @@
         {% for file in files %}
         <tr>
           <td><strong>{{ file.name }}</strong></td>
-          <td><input class="form-control form-control-sm" readonly value="{{ request.host_url[:-1] }}{{ file.url }}"></td>
+          <td><input class="form-control form-control-sm" readonly value="{{ file.url if file.url.startswith('http') else request.host_url[:-1] ~ file.url }}"></td>
           <td>{{ file.size_kb }} KB</td>
           <td>{{ file.updated_at.strftime('%d/%m/%Y %H:%M') }}</td>
           <td class="text-end">
             <div class="d-flex gap-2 justify-content-end">
               <a class="btn btn-sm btn-outline-dark" href="{{ file.url }}" target="_blank" rel="noopener">Abrir</a>
-              <form method="post" action="{{ url_for('admin.media_delete') }}" onsubmit="return confirm('Excluir este arquivo?');">
-                <input type="hidden" name="url" value="{{ file.url }}">
-                <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
+              <form method="post" action="{{ url_for('admin.media_delete') }}" onsubmit="return confirm('Remover da biblioteca? Links existentes continuam funcionando.');">
+                <input type="hidden" name="url" value="{{ file.delete_url }}">
+                <button class="btn btn-sm btn-outline-danger" type="submit">Remover</button>
               </form>
             </div>
           </td>
@@ -40,4 +40,7 @@
     </table>
   </div>
 </section>
+
+<nav class="d-flex justify-content-between mt-3" aria-label="Paginação">
+{% if page > 1 %}<a href="{{ url_for('admin.media_library', page=page-1) }}">Anterior</a>{% endif %}<span>Página {{ page }}</span>{% if has_next %}<a href="{{ url_for('admin.media_library', page=page+1) }}">Próxima</a>{% endif %}</nav>
 {% endblock %}

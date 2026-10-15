@@ -10,7 +10,8 @@ from urllib.parse import urlparse
 
 from flask import Blueprint, render_template, redirect, url_for, request, flash, current_app, abort
 from flask_login import login_user, logout_user, login_required, current_user
-from sqlalchemy import func, desc, or_
+from sqlalchemy import func, desc, or_, case, distinct
+from sqlalchemy.orm import load_only, selectinload
 from werkzeug.utils import secure_filename
 
 from .models import db, User, AdSlot, SiteSetting, PageView, Post, Category, post_categories, AnalyticsSession, DeletedWpPost
@@ -253,6 +254,10 @@ def _absolute_media_url(value: str) -> str:
         return ''
     if value.startswith('http://') or value.startswith('https://'):
         return value
+    from .media import resolve_media
+    value = resolve_media(value)
+    if value.startswith('https://'):
+        return value
     base = request.url_root.rstrip('/')
     return f"{base}{value if value.startswith('/') else '/' + value}"
 
@@ -409,15 +414,8 @@ def _file_ext(filename: str) -> str:
 def _save_upload(file_storage, subdir: str = "general") -> str:
     if not file_storage or not getattr(file_storage, "filename", ""):
         return ""
-    ext = _file_ext(file_storage.filename) or ".bin"
-    day_dir = datetime.utcnow().strftime("%Y/%m/%d")
-    folder = _media_root() / subdir / day_dir
-    folder.mkdir(parents=True, exist_ok=True)
-    fname = f"{uuid4().hex}{ext}"
-    full_path = folder / fname
-    file_storage.save(full_path)
-    rel = full_path.relative_to(_media_root()).as_posix()
-    return f"{current_app.config['MEDIA_URL_PREFIX'].rstrip('/')}/{rel}"
+    from .media import save_upload
+    return save_upload(file_storage.stream, file_storage.filename, subdir)
 
 
 def _local_media_path_from_url(url: str) -> Path | None:
@@ -433,13 +431,8 @@ def _local_media_path_from_url(url: str) -> Path | None:
 
 
 def _delete_local_media(url: str) -> None:
-    path = _local_media_path_from_url(url)
-    if path and path.exists() and path.is_file():
-        try:
-            path.unlink()
-        except Exception:
-            pass
-
+    from .media import delete_media
+    delete_media(url)
 
 
 
@@ -566,40 +559,33 @@ def _analytics_stats(days: int = 30, start_date: date | None = None, end_date: d
     if start_day > end_day:
         start_day, end_day = end_day, start_day
 
+    start_day = max(start_day, end_day - timedelta(days=365))
     window_days = max((end_day - start_day).days + 1, 1)
     current_start = datetime.combine(start_day, time.min)
     current_end = datetime.combine(end_day + timedelta(days=1), time.min)
     previous_start = current_start - timedelta(days=window_days)
     previous_end = current_start
 
-    current_sessions = AnalyticsSession.query.filter(
-        AnalyticsSession.created_at >= current_start,
-        AnalyticsSession.created_at < current_end,
-    ).all()
-    previous_sessions = AnalyticsSession.query.filter(
-        AnalyticsSession.created_at >= previous_start,
-        AnalyticsSession.created_at < previous_end,
-    ).all()
-
-    def summarize(items):
-        sessions = len(items)
-        pageviews = sum((item.pageviews or 0) for item in items)
-        total_users = len({item.visitor_id for item in items if item.visitor_id})
-        bounce_sessions = sum(1 for item in items if item.is_bounce)
-        new_users = len({item.visitor_id for item in items if item.is_new_user and item.visitor_id})
-        avg_duration = round(sum((item.duration_seconds or 0) for item in items) / sessions) if sessions else 0
-        bounce_rate = round((bounce_sessions / sessions) * 100, 1) if sessions else 0
+    def summarize(start, end):
+        valid_visitor = func.nullif(AnalyticsSession.visitor_id, "")
+        row = db.session.query(
+            func.count(AnalyticsSession.id),
+            func.coalesce(func.sum(AnalyticsSession.pageviews), 0),
+            func.count(distinct(valid_visitor)),
+            func.coalesce(func.sum(case((AnalyticsSession.is_bounce.is_(True), 1), else_=0)), 0),
+            func.count(distinct(case((AnalyticsSession.is_new_user.is_(True), valid_visitor)))),
+            func.coalesce(func.sum(AnalyticsSession.duration_seconds), 0),
+        ).filter(AnalyticsSession.created_at >= start, AnalyticsSession.created_at < end).one()
+        sessions, pageviews, users, bounces, new_users, duration = row
         return {
-            "sessions": sessions,
-            "pageviews": pageviews,
-            "avg_duration": avg_duration,
-            "total_users": total_users,
-            "bounce_rate": bounce_rate,
+            "sessions": sessions, "pageviews": int(pageviews), "total_users": users,
+            "avg_duration": round(duration / sessions) if sessions else 0,
+            "bounce_rate": round(bounces / sessions * 100, 1) if sessions else 0,
             "new_users": new_users,
         }
 
-    current = summarize(current_sessions)
-    previous = summarize(previous_sessions)
+    current = summarize(current_start, current_end)
+    previous = summarize(previous_start, previous_end)
     cards = []
     labels = {
         "sessions": "Sessions",
@@ -644,31 +630,23 @@ def _analytics_stats(days: int = 30, start_date: date | None = None, end_date: d
         .all()
     )
 
-    by_day = {}
+    daily_rows = db.session.query(
+        func.date(AnalyticsSession.created_at).label("day"),
+        func.count(AnalyticsSession.id),
+        func.coalesce(func.sum(AnalyticsSession.pageviews), 0),
+        func.count(distinct(func.nullif(AnalyticsSession.visitor_id, ""))),
+    ).filter(
+        AnalyticsSession.created_at >= current_start, AnalyticsSession.created_at < current_end,
+    ).group_by(func.date(AnalyticsSession.created_at)).all()
+    by_day = {str(row[0]): row[1:] for row in daily_rows}
+    daily_series = []
     for offset in range(window_days):
         day = start_day + timedelta(days=offset)
-        by_day[day] = {"sessions": 0, "pageviews": 0, "visitor_ids": set()}
-
-    for item in current_sessions:
-        item_day = item.created_at.date()
-        if item_day not in by_day:
-            continue
-        bucket = by_day[item_day]
-        bucket["sessions"] += 1
-        bucket["pageviews"] += int(item.pageviews or 0)
-        if item.visitor_id:
-            bucket["visitor_ids"].add(item.visitor_id)
-
-    daily_series = []
-    for day in sorted(by_day.keys()):
-        bucket = by_day[day]
+        sessions, pageviews, users = by_day.get(day.isoformat(), (0, 0, 0))
         daily_series.append({
-            "iso": day.isoformat(),
-            "label": day.strftime('%d/%m'),
-            "label_short": day.strftime('%d/%m'),
-            "sessions": bucket["sessions"],
-            "pageviews": bucket["pageviews"],
-            "total_users": len(bucket["visitor_ids"]),
+            "iso": day.isoformat(), "label": day.strftime('%d/%m'),
+            "label_short": day.strftime('%d/%m'), "sessions": sessions,
+            "pageviews": int(pageviews), "total_users": users,
         })
 
     return {
@@ -683,7 +661,6 @@ def _analytics_stats(days: int = 30, start_date: date | None = None, end_date: d
         "daily_series": daily_series,
     }
 
-
 def _dashboard_stats():
     pv_total = db.session.query(func.count(PageView.id)).scalar() or 0
     since = datetime.utcnow() - timedelta(hours=24)
@@ -693,16 +670,7 @@ def _dashboard_stats():
     wp_posts = db.session.query(func.count(Post.id)).filter(Post.source == "wp").scalar() or 0
     categories_total = db.session.query(func.count(Category.id)).scalar() or 0
     active_ads = db.session.query(func.count(AdSlot.id)).filter(AdSlot.is_active.is_(True)).scalar() or 0
-    recent_posts = Post.query.order_by(desc(Post.updated_at), desc(Post.published_at)).limit(8).all()
-    popular_posts = (
-        db.session.query(Post, func.count(PageView.id).label("views"))
-        .outerjoin(PageView, PageView.post_id == Post.id)
-        .group_by(Post.id)
-        .order_by(desc("views"), desc(Post.published_at))
-        .limit(8)
-        .all()
-    )
-    analytics = _analytics_stats(30)
+    recent_posts = Post.query.options(load_only(Post.id, Post.title, Post.slug, Post.source, Post.published_at, Post.updated_at)).order_by(desc(Post.updated_at), desc(Post.published_at)).limit(8).all()
     return {
         "pv_total": pv_total,
         "pv_24h": pv_24h,
@@ -712,15 +680,13 @@ def _dashboard_stats():
         "categories_total": categories_total,
         "active_ads": active_ads,
         "recent_posts": recent_posts,
-        "popular_posts": popular_posts,
-        "analytics": analytics,
     }
 
 
 def _common_admin_context(section: str, **extra):
     data = {
         "section": section,
-        "stats": _dashboard_stats(),
+        "stats": _dashboard_stats() if section == "dashboard" else {},
     }
     data.update(extra)
     return data
@@ -790,10 +756,12 @@ def posts_list():
         q = q.filter(Post.title.ilike(f"%{term}%"))
     if source in {'local', 'wp', 'hub'}:
         q = q.filter(Post.source == source)
-    posts = q.order_by(desc(Post.published_at), desc(Post.updated_at), desc(Post.id)).all()
+    pagination = q.options(load_only(Post.id, Post.title, Post.slug, Post.source, Post.published_at, Post.updated_at), selectinload(Post.categories)).order_by(desc(Post.published_at), desc(Post.updated_at), desc(Post.id)).paginate(page=request.args.get('page', 1, type=int), per_page=40, error_out=False)
+    posts = pagination.items
     return render_template(
         'admin/posts_list.html',
         posts=posts,
+        pagination=pagination,
         term=term,
         source=source,
         now_utc=datetime.utcnow(),
@@ -833,6 +801,8 @@ def posts_new():
             post.categories = Category.query.filter(Category.id.in_(selected_ids)).all()
         db.session.add(post)
         db.session.commit()
+        from .media import enqueue_post
+        enqueue_post(post.id)
         flash('Matéria criada com sucesso.', 'success')
         return redirect(url_for('admin.posts_edit', post_id=post.id))
     return render_template('admin/post_form.html', form=form, mode='new', post=None, hub=_hub_config(), **_common_admin_context('posts'))
@@ -866,8 +836,9 @@ def posts_edit(post_id):
         selected_ids = form.categories.data or []
         post.categories = Category.query.filter(Category.id.in_(selected_ids)).all() if selected_ids else []
         db.session.commit()
-        if form.featured_image_file.data and old_image and old_image != post.featured_image:
-            _delete_local_media(old_image)
+        # Retain shared media; removal is explicit in the media library.
+        from .media import enqueue_post
+        enqueue_post(post.id)
         flash('Matéria atualizada com sucesso.', 'success')
         return redirect(url_for('admin.posts_edit', post_id=post.id))
     return render_template('admin/post_form.html', form=form, mode='edit', post=post, hub=_hub_config(), **_common_admin_context('posts'))
@@ -973,15 +944,8 @@ def dashboard():
     if r:
         return r
     slots = AdSlot.query.order_by(AdSlot.key.asc()).all()
-    media_files = []
-    root = _media_root()
-    if root.exists():
-        for p in sorted([p for p in root.rglob("*") if p.is_file()], key=lambda x: x.stat().st_mtime, reverse=True)[:8]:
-            media_files.append({
-                "name": p.name,
-                "url": f"{current_app.config['MEDIA_URL_PREFIX'].rstrip('/')}/{p.relative_to(root).as_posix()}",
-                "size_kb": max(1, round(p.stat().st_size / 1024)),
-            })
+    from .media import list_media
+    media_files, _ = list_media(1, 8)
     return render_template(
         "admin/dashboard.html",
         slots=slots,
@@ -1016,7 +980,7 @@ def insights_page():
         selected_metric = "sessions"
 
     metric_chart = _build_chart_data(insights["daily_series"], selected_metric)
-    dashboard_stats = _dashboard_stats()
+    dashboard_stats = {"pv_24h": db.session.query(func.count(PageView.id)).filter(PageView.created_at >= datetime.utcnow() - timedelta(hours=24)).scalar() or 0}
     visible_cards = []
     for card in insights["cards"]:
         if card.get("key") not in {"sessions", "pageviews", "total_users"}:
@@ -1144,17 +1108,10 @@ def media_library():
     r = _require_admin()
     if r:
         return r
-    files = []
-    root = _media_root()
-    if root.exists():
-        for p in sorted([item for item in root.rglob('*') if item.is_file()], key=lambda item: item.stat().st_mtime, reverse=True):
-            files.append({
-                'name': p.name,
-                'url': f"{current_app.config['MEDIA_URL_PREFIX'].rstrip('/')}/{p.relative_to(root).as_posix()}",
-                'size_kb': max(1, round(p.stat().st_size / 1024)),
-                'updated_at': datetime.fromtimestamp(p.stat().st_mtime),
-            })
-    return render_template('admin/media_library.html', files=files, **_common_admin_context('media'))
+    from .media import list_media
+    page = max(request.args.get('page', 1, type=int), 1)
+    files, has_next = list_media(page, 48)
+    return render_template('admin/media_library.html', files=files, page=page, has_next=has_next, **_common_admin_context('media'))
 
 
 @admin_bp.post('/media/upload')
@@ -1716,7 +1673,7 @@ def wordpress_sync_page():
         client = WPClient(current_app.config["WP_BASE_URL"])
         sync_categories(client)
         sync_posts(client, max_pages=50, per_page=current_app.config["WP_PER_PAGE"], download_images=True)
-        flash("Importação do WordPress concluída com imagens salvas no servidor.", "success")
+        flash("Importação concluída. As imagens estão na fila de otimização.", "success")
     except Exception as e:
         db.session.rollback()
         flash(f"Erro na importação do WordPress: {e}", "danger")
@@ -1732,7 +1689,7 @@ def wordpress_localize_images():
     try:
         report = localize_existing_wp_images()
         flash(
-            f"Imagens processadas. Posts atualizados: {report['updated_posts']}. Capa baixada: {report['featured_downloaded']}. Conteúdo atualizado: {report['content_updated']}.",
+            f"Otimização agendada para {report['queued_posts']} matérias.",
             "success",
         )
     except Exception as e:

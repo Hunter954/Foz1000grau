@@ -58,29 +58,8 @@ def _guess_extension(source_url: str, content_type: str = "") -> str:
 
 
 def download_external_image(source_url: str | None, folder: str = "wp") -> str | None:
-    if not source_url:
-        return None
-    if source_url.startswith("/media/"):
-        return source_url
-
-    media_root = Path(current_app.config["MEDIA_ROOT"])
-    target_dir = media_root / folder / datetime.utcnow().strftime("%Y/%m")
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    response = requests.get(source_url, timeout=25, stream=True)
-    response.raise_for_status()
-
-    ext = _guess_extension(source_url, response.headers.get("Content-Type", ""))
-    filename = f"{uuid.uuid4().hex}{ext}"
-    target_path = target_dir / filename
-
-    with target_path.open("wb") as fh:
-        for chunk in response.iter_content(chunk_size=8192):
-            if chunk:
-                fh.write(chunk)
-
-    relative = target_path.relative_to(media_root).as_posix()
-    return _media_url(relative)
+    from .media import remote_image
+    return remote_image(source_url, folder)
 
 
 def localize_content_images(html: str | None) -> str | None:
@@ -133,8 +112,9 @@ def sync_posts(client: WPClient, max_pages: int = 10, per_page: int = 20, downlo
         if not data:
             break
 
-        deleted_wp_ids = {row[0] for row in db.session.query(DeletedWpPost.wp_id).all()}
+        deleted_wp_ids = {row[0] for row in db.session.query(DeletedWpPost.wp_id).filter(DeletedWpPost.wp_id.in_([p["id"] for p in data])).all()}
 
+        changed_posts = []
         for p in data:
             wp_id = p["id"]
             if wp_id in deleted_wp_ids:
@@ -151,14 +131,6 @@ def sync_posts(client: WPClient, max_pages: int = 10, per_page: int = 20, downlo
 
             excerpt_safe = bleach.clean(excerpt, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS, strip=True)
             content_safe = bleach.clean(content, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS, strip=True)
-            if download_images:
-                if featured and not featured.startswith('/media/'):
-                    try:
-                        featured = download_external_image(featured, folder='wp/featured') or featured
-                    except Exception:
-                        pass
-                content_safe = localize_content_images(content_safe)
-
             post = Post.query.filter_by(wp_id=wp_id).first()
             if not post:
                 post = Post(wp_id=wp_id, source="wp", slug=slug, title=title)
@@ -172,6 +144,7 @@ def sync_posts(client: WPClient, max_pages: int = 10, per_page: int = 20, downlo
             post.published_at = published_at
             post.updated_at = updated_at
 
+            changed_posts.append(post)
             post.categories = []
             for cid in (p.get("categories") or []):
                 cat = Category.query.filter_by(wp_id=cid).first()
@@ -179,6 +152,9 @@ def sync_posts(client: WPClient, max_pages: int = 10, per_page: int = 20, downlo
                     post.categories.append(cat)
 
         db.session.commit()
+        from .media import enqueue_post
+        for changed_post in changed_posts:
+            enqueue_post(changed_post.id)
         total_pages = int(headers.get("X-WP-TotalPages", "1"))
         if page >= total_pages:
             break
@@ -186,38 +162,17 @@ def sync_posts(client: WPClient, max_pages: int = 10, per_page: int = 20, downlo
 
 
 def localize_existing_wp_images(limit: int | None = None) -> dict:
-    posts_query = Post.query.filter(Post.source == 'wp').order_by(Post.published_at.desc(), Post.id.desc())
-    if limit:
-        posts = posts_query.limit(limit).all()
-    else:
-        posts = posts_query.all()
-
-    updated = 0
-    featured_downloaded = 0
-    content_updated = 0
-    for post in posts:
-        changed = False
-        if post.featured_image and not post.featured_image.startswith('/media/'):
-            try:
-                post.featured_image = download_external_image(post.featured_image, folder='wp/featured') or post.featured_image
-                featured_downloaded += 1
-                changed = True
-            except Exception:
-                pass
-
-        if post.content_html and '/media/' not in post.content_html and '<img' in post.content_html.lower():
-            localized = localize_content_images(post.content_html)
-            if localized != post.content_html:
-                post.content_html = localized
-                content_updated += 1
-                changed = True
-
-        if changed:
-            updated += 1
-
-    db.session.commit()
-    return {
-        'updated_posts': updated,
-        'featured_downloaded': featured_downloaded,
-        'content_updated': content_updated,
-    }
+    from .media import enqueue_post
+    queued = 0
+    cursor = 0
+    while not limit or queued < limit:
+        size = min(50, limit - queued) if limit else 50
+        ids = db.session.query(Post.id).filter(Post.source == 'wp', Post.id > cursor).order_by(Post.id).limit(size).all()
+        if not ids:
+            break
+        for (post_id,) in ids:
+            enqueue_post(post_id)
+            cursor = post_id
+            queued += 1
+        db.session.remove()
+    return {'updated_posts': queued, 'featured_downloaded': 0, 'content_updated': 0, 'queued_posts': queued}

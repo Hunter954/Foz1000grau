@@ -1,4 +1,5 @@
 import requests
+import json
 from urllib.parse import urljoin
 
 class WPClient:
@@ -8,9 +9,14 @@ class WPClient:
 
     def _get(self, path: str, params: dict):
         url = urljoin(self.base_url, path.lstrip("/"))
-        r = requests.get(url, params=params, timeout=self.timeout)
-        r.raise_for_status()
-        return r.json(), r.headers
+        with requests.get(url, params=params, timeout=(4, self.timeout), stream=True) as r:
+            r.raise_for_status()
+            body = bytearray()
+            for chunk in r.iter_content(65536):
+                body.extend(chunk)
+                if len(body) > 4 * 1024 * 1024:
+                    raise ValueError("WordPress response exceeds 4 MB")
+            return json.loads(body), dict(r.headers)
 
     def list_posts(self, page: int = 1, per_page: int = 20):
         return self._get(

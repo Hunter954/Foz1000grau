@@ -19,7 +19,7 @@
       </div>
       <a class="f1000-link-block" href="{{ url_for('site.post', slug=hero.slug) }}">
         <h1>{{ clean_text(hero.title, 120) }}</h1>
-        <p>{{ clean_text(hero.excerpt or hero.content_html, 210) }}</p>
+        <p>{{ clean_text(hero.excerpt or hero.summary, 210) }}</p>
       </a>
     </article>
 
@@ -38,7 +38,7 @@
         <span class="date-label">{{ format_date_br(p.published_at) }}</span>
       </div>
       <h3>{{ clean_text(p.title, 72) }}</h3>
-      <p>{{ clean_text(p.excerpt or p.content_html, 140) }}</p>
+      <p>{{ clean_text(p.excerpt or p.summary, 140) }}</p>
     </a>
     {% endfor %}
   </section>
@@ -79,7 +79,7 @@
                     <span class="date-label">{{ format_date_br(item_feature.published_at) }}</span>
                   </div>
                   <h3 class="f1000-editorial__feature-title">{{ clean_text(item_feature.title, 90) }}</h3>
-                  <p>{{ clean_text(item_feature.excerpt or item_feature.content_html, 170) }}</p>
+                  <p>{{ clean_text(item_feature.excerpt or item_feature.summary, 170) }}</p>
                 </a>
               {% endif %}
             </div>
@@ -111,7 +111,7 @@
                     <span class="date-label">{{ format_date_br(section_feature.published_at) }}</span>
                   </div>
                   <h3 class="f1000-editorial__feature-title">{{ clean_text(section_feature.title, 90) }}</h3>
-                  <p>{{ clean_text(section_feature.excerpt or section_feature.content_html, 170) }}</p>
+                  <p>{{ clean_text(section_feature.excerpt or section_feature.summary, 170) }}</p>
                 </a>
               {% endif %}
             </div>

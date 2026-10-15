@@ -43,4 +43,7 @@
     </table>
   </div>
 </section>
+
+<nav class="d-flex justify-content-between mt-3" aria-label="Paginação">
+{% if pagination.has_prev %}<a href="{{ url_for('admin.posts_list', page=pagination.prev_num, q=term, source=source) }}">Anterior</a>{% endif %}<span>Página {{ pagination.page }} de {{ pagination.pages or 1 }}</span>{% if pagination.has_next %}<a href="{{ url_for('admin.posts_list', page=pagination.next_num, q=term, source=source) }}">Próxima</a>{% endif %}</nav>
 {% endblock %}

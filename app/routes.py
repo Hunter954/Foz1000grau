@@ -4,8 +4,9 @@ from pathlib import Path
 import re
 import json
 
-from flask import Blueprint, render_template, abort, request, current_app, send_from_directory, jsonify, make_response, url_for
+from flask import Blueprint, render_template, abort, request, current_app, send_from_directory, redirect, jsonify, make_response, url_for
 from sqlalchemy import desc, func, or_
+from sqlalchemy.orm import defer, load_only, with_expression
 
 from .models import db, Post, Category, AdSlot, SiteSetting, PageView, AnalyticsSession, post_categories
 from .sync import download_external_image
@@ -199,7 +200,12 @@ def inject_site_globals():
 @site_bp.get("/media/<path:filename>")
 def media(filename):
     media_root = Path(current_app.config["MEDIA_ROOT"]).resolve()
-    return send_from_directory(media_root, filename)
+    from .media import resolve_media
+    target = resolve_media('/media/' + filename)
+    if target != '/media/' + filename:
+        return redirect(target, code=302)
+    response = send_from_directory(media_root, filename, max_age=86400)
+    return response
 
 
 
@@ -279,7 +285,7 @@ def _home_calendar_date():
 
 
 def _home_posts_query():
-    q = _published_posts_query()
+    q = _published_posts_query().options(defer(Post.content_html), with_expression(Post.summary, func.substr(Post.content_html, 1, 1000)))
     selected_day = _home_calendar_date()
     if selected_day:
         # Monta a home como se o dia selecionado fosse o "hoje":
@@ -372,7 +378,7 @@ def sitemap_xml():
     ]
     for cat in Category.query.order_by(Category.updated_at.desc() if hasattr(Category, 'updated_at') else Category.id.desc()).all():
         pages.append((url_for('site.category', slug=cat.slug, _external=True), datetime.utcnow()))
-    for post in _published_posts_query().order_by(desc(Post.updated_at), desc(Post.published_at)).limit(2000).all():
+    for post in _published_posts_query().options(load_only(Post.id, Post.slug, Post.updated_at, Post.published_at)).order_by(desc(Post.updated_at), desc(Post.published_at)).limit(2000).all():
         pages.append((url_for('site.post', slug=post.slug, _external=True), post.updated_at or post.published_at or datetime.utcnow()))
     xml = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
     for loc, lastmod in pages:
@@ -414,11 +420,7 @@ def hub_posts_upsert_api():
     post.source = 'hub'
 
     incoming_image = (post_data.get('featured_image') or '').strip()
-    if incoming_image:
-        try:
-            post.featured_image = download_external_image(incoming_image, folder='hub/featured') or incoming_image
-        except Exception:
-            post.featured_image = incoming_image
+    post.featured_image = incoming_image or None
 
     categories = []
     for item in (post_data.get('categories') or []):
@@ -438,7 +440,9 @@ def hub_posts_upsert_api():
         categories.append(cat)
     post.categories = categories
     db.session.commit()
-    return jsonify({'ok': True, 'slug': post.slug})
+    from .media import enqueue_post
+    enqueue_post(post.id)
+    return jsonify({'ok': True, 'slug': post.slug, 'images_processing': True})
 
 
 @site_bp.post('/api/hub/posts/delete')
@@ -467,7 +471,7 @@ def home():
     _track_view(None)
 
     home_calendar_day = _home_calendar_date()
-    latest = _home_posts_query().order_by(desc(Post.published_at), desc(Post.id)).limit(24).all()
+    latest = _home_posts_query().options(defer(Post.content_html), with_expression(Post.summary, func.substr(Post.content_html, 1, 1000))).order_by(desc(Post.published_at), desc(Post.id)).limit(24).all()
     lead_post = latest[0] if latest else None
     latest_queue = latest[1:4] if len(latest) > 1 else []
     excluded_ids = {p.id for p in [lead_post, *latest_queue] if p}
@@ -476,7 +480,7 @@ def home():
         cat = Category.query.filter_by(slug=slug).first()
         if not cat:
             return None, []
-        q = (_home_posts_query().join(Post.categories)
+        q = (_home_posts_query().options(defer(Post.content_html), with_expression(Post.summary, func.substr(Post.content_html, 1, 1000))).join(Post.categories)
              .filter(Category.id == cat.id))
         if exclude_ids:
             q = q.filter(~Post.id.in_(list(exclude_ids)))
@@ -507,7 +511,7 @@ def home():
 
     category_sections = []
     for cat in ordered_categories[:10]:
-        posts = (_home_posts_query().join(Post.categories)
+        posts = (_home_posts_query().options(defer(Post.content_html), with_expression(Post.summary, func.substr(Post.content_html, 1, 1000))).join(Post.categories)
                  .filter(Category.id == cat.id)
                  .order_by(desc(Post.published_at), desc(Post.id))
                  .limit(6).all())
@@ -572,7 +576,7 @@ def post(slug):
     _track_view(post.id)
 
     category_ids = [c.id for c in post.categories]
-    latest_posts = (_published_posts_query()
+    latest_posts = (_published_posts_query().options(defer(Post.content_html), with_expression(Post.summary, func.substr(Post.content_html, 1, 1000)))
                     .filter(Post.id != post.id)
                     .order_by(desc(Post.published_at))
                     .limit(4)
@@ -580,7 +584,7 @@ def post(slug):
 
     related_posts = []
     if category_ids:
-        related_posts = (_published_posts_query().join(Post.categories)
+        related_posts = (_published_posts_query().options(defer(Post.content_html), with_expression(Post.summary, func.substr(Post.content_html, 1, 1000))).join(Post.categories)
                          .filter(Category.id.in_(category_ids), Post.id != post.id)
                          .order_by(desc(Post.published_at))
                          .limit(6)
@@ -589,7 +593,7 @@ def post(slug):
     if len(related_posts) < 6:
         existing_ids = {p.id for p in related_posts}
         existing_ids.add(post.id)
-        complement = (_published_posts_query()
+        complement = (_published_posts_query().options(defer(Post.content_html), with_expression(Post.summary, func.substr(Post.content_html, 1, 1000)))
                       .filter(~Post.id.in_(list(existing_ids)))
                       .order_by(desc(Post.published_at))
                       .limit(6 - len(related_posts))
@@ -632,7 +636,7 @@ def category(slug):
 
     page = max(int(request.args.get("page", "1")), 1)
     per_page = 12
-    q = (_published_posts_query().join(Post.categories)
+    q = (_published_posts_query().options(defer(Post.content_html), with_expression(Post.summary, func.substr(Post.content_html, 1, 1000))).join(Post.categories)
          .filter(Category.id == cat.id)
          .order_by(desc(Post.published_at)))
     pagination = q.paginate(page=page, per_page=per_page, error_out=False)
@@ -661,7 +665,7 @@ def search():
     page = max(int(request.args.get("page", "1")), 1)
     per_page = 12
 
-    q = _published_posts_query()
+    q = _published_posts_query().options(defer(Post.content_html), with_expression(Post.summary, func.substr(Post.content_html, 1, 1000)))
     if term:
         like = f"%{term}%"
         q = q.filter(Post.title.ilike(like))
@@ -684,3 +688,9 @@ def search():
         ad_sidebar_1=_get_ad("sidebar_1"),
         ad_sidebar_2=_get_ad("sidebar_2"),
     )
+
+
+@site_bp.get('/health')
+def health():
+    from .media import r2_enabled
+    return jsonify(ok=True, memory_optimized=True, image_optimizer='webp-1280-q68', r2_enabled=r2_enabled())

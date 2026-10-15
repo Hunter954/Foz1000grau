@@ -1,5 +1,6 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import query_expression
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -42,6 +43,7 @@ class Post(db.Model):
     slug = db.Column(db.String(220), unique=True, index=True, nullable=False)
     excerpt = db.Column(db.Text, nullable=True)
     content_html = db.Column(db.Text, nullable=True)
+    summary = query_expression()
 
     featured_image = db.Column(db.String(800), nullable=True)
     author_name = db.Column(db.String(190), nullable=True)
@@ -49,7 +51,7 @@ class Post(db.Model):
     published_at = db.Column(db.DateTime, index=True, nullable=True)
     updated_at = db.Column(db.DateTime, nullable=True)
 
-    categories = db.relationship("Category", secondary=post_categories, lazy="joined")
+    categories = db.relationship("Category", secondary=post_categories, lazy="selectin")
 
 
 class DeletedWpPost(db.Model):
@@ -147,3 +149,27 @@ class AnalyticsSession(db.Model):
     is_new_user = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
+class MediaAsset(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    hidden = db.Column(db.Boolean, default=False, nullable=False)
+    # Original URL is retained as a stable redirect, including old /media paths.
+    source_key = db.Column(db.String(64), unique=True, nullable=False)
+    source_url = db.Column(db.Text, nullable=False)
+    local_path = db.Column(db.String(1000), nullable=True)
+    public_url = db.Column(db.Text, nullable=True)
+    size_bytes = db.Column(db.BigInteger, default=0, nullable=False)
+    original_bytes = db.Column(db.BigInteger, default=0, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class MediaTask(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    kind = db.Column(db.String(20), nullable=False)
+    target = db.Column(db.String(1000), nullable=False)
+    task_key = db.Column(db.String(64), unique=True, nullable=False)
+    attempts = db.Column(db.Integer, default=0, nullable=False)
+    available_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    state = db.Column(db.String(20), default='pending', nullable=False, index=True)
+    error = db.Column(db.String(100), nullable=True)

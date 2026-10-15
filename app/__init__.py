@@ -115,15 +115,17 @@ def _ensure_defaults():
 
 
 def _auto_sync_loop(app: Flask):
-    with app.app_context():
-        client = WPClient(app.config["WP_BASE_URL"])
-        while True:
+    client = WPClient(app.config["WP_BASE_URL"])
+    while True:
+        with app.app_context():
             try:
                 sync_categories(client)
                 sync_posts(client, max_pages=50, per_page=app.config["WP_PER_PAGE"])
             except Exception:
-                pass
-            time.sleep(app.config["AUTO_SYNC_INTERVAL"])
+                app.logger.warning("Automatic WP sync failed")
+            finally:
+                db.session.remove()
+        time.sleep(app.config["AUTO_SYNC_INTERVAL"])
 
 
 def create_app():
@@ -133,6 +135,7 @@ def create_app():
 
     Path(app.config["MEDIA_ROOT"]).mkdir(parents=True, exist_ok=True)
 
+    from .media import init_media
     db.init_app(app)
     login_manager.init_app(app)
 
@@ -162,6 +165,8 @@ def create_app():
                 u.set_password(admin_password)
         db.session.commit()
         print("ADMIN OK:", admin_email)
+
+    init_media(app)
 
     if app.config.get("AUTO_SYNC_INTERVAL", 0) and app.config["AUTO_SYNC_INTERVAL"] > 0:
         t = threading.Thread(target=_auto_sync_loop, args=(app,), daemon=True)
