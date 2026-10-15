@@ -242,3 +242,14 @@ def test_newer_article_edit_is_not_overwritten(app,monkeypatch):
     post=db.session.get(Post,post_id)
     assert post.featured_image=='https://new.test/b.jpg'
     assert post.content_html=='<p>new</p>'
+
+
+def test_live_posts_have_priority_over_backfill(app,monkeypatch):
+    media.enqueue('post', '1', background=True)
+    media.enqueue('post', '2')
+    processed=[]
+    monkeypatch.setattr(media,'process_post',lambda target:processed.append(target))
+    media.run_one()
+    assert processed==['2']
+    media.run_one()
+    assert processed==['2','1']

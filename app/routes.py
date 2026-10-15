@@ -203,7 +203,9 @@ def media(filename):
     from .media import resolve_media
     target = resolve_media('/media/' + filename)
     if target != '/media/' + filename:
-        return redirect(target, code=302)
+        response = redirect(target, code=302)
+        response.headers["Cache-Control"] = "public, max-age=86400"
+        return response
     response = send_from_directory(media_root, filename, max_age=86400)
     return response
 

@@ -21,7 +21,7 @@ import click
 import requests
 from flask import current_app, request, jsonify
 from PIL import Image, ImageOps, UnidentifiedImageError
-from sqlalchemy import select
+from sqlalchemy import select, case
 from sqlalchemy.exc import IntegrityError
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 from .models import db, MediaAsset, MediaTask, Post
@@ -77,16 +77,17 @@ def _remember(source, relative, original_bytes=0, public_url=None):
             conn.execute(table.insert().values(**values))
 
 
-def enqueue(kind, target):
+def enqueue(kind, target, background=False):
     table = MediaTask.__table__
     key = digest(kind + ':' + str(target))
+    stored_kind = 'backfill-' + kind if background else kind
     try:
         with db.engine.begin() as conn:
             task = conn.execute(select(table.c.id).where(table.c.task_key == key)).scalar()
             if task:
-                conn.execute(table.update().where(table.c.id == task).values(state='pending', attempts=0, available_at=datetime.utcnow(), error=None))
+                conn.execute(table.update().where(table.c.id == task).values(kind=stored_kind, state='pending', attempts=0, available_at=datetime.utcnow(), error=None))
             else:
-                conn.execute(table.insert().values(kind=kind, target=str(target), task_key=key, state='pending', attempts=0, available_at=datetime.utcnow()))
+                conn.execute(table.insert().values(kind=stored_kind, target=str(target), task_key=key, state='pending', attempts=0, available_at=datetime.utcnow()))
     except IntegrityError:
         pass  # Another request already queued the same durable work.
 
@@ -284,7 +285,7 @@ def seed_existing_posts():
             with db.engine.connect() as conn:
                 exists = conn.execute(select(MediaTask.id).where(MediaTask.task_key == digest('post:'+str(post_id)))).scalar()
             if not exists:
-                enqueue_post(post_id)
+                enqueue('post', post_id, background=True)
             cursor = post_id
         run_one()
         db.session.remove()
@@ -320,10 +321,10 @@ def worker_lock():
 
 
 def run_one():
-    task = db.session.execute(select(MediaTask).where(MediaTask.state == 'pending', MediaTask.available_at <= datetime.utcnow()).order_by(MediaTask.id).limit(1)).scalar_one_or_none()
+    task = db.session.execute(select(MediaTask).where(MediaTask.state == 'pending', MediaTask.available_at <= datetime.utcnow()).order_by(case((MediaTask.kind.like('backfill-%'), 1), else_=0), MediaTask.id).limit(1)).scalar_one_or_none()
     if not task:
         return False
-    task_id, kind, target, attempts, revision = task.id, task.kind, task.target, task.attempts, task.available_at
+    task_id, kind, target, attempts, revision = task.id, task.kind.removeprefix('backfill-'), task.target, task.attempts, task.available_at
     db.session.remove()
     try:
         if kind == 'post':
@@ -359,7 +360,7 @@ def index_existing():
                 with db.engine.connect() as conn:
                     exists = conn.execute(select(MediaTask.id).where(MediaTask.task_key == digest(kind+':'+relative))).scalar()
                 if not exists:
-                    enqueue(kind, relative)
+                    enqueue(kind, relative, background=True)
             db.session.remove()
             yield relative
 
@@ -371,18 +372,21 @@ def _worker(app):
             with app.app_context(), worker_lock() as acquired:
                 if acquired:
                     if not app.extensions.get('media_indexed'):
+                        indexed = 0
                         for n, _ in enumerate(index_existing()):
+                            indexed += 1
                             if n % 10 == 0:
                                 run_one()
                             time.sleep(.01)
                         seed_existing_posts()
                         app.extensions['media_indexed'] = True
+                        app.logger.warning('MEDIA_INDEX_READY files=%s r2=%s', indexed, r2_enabled())
                     did_work = run_one()
                 else:
                     did_work = False
                 db.session.remove()
-        except Exception:
-            app.logger.warning('Media worker retry scheduled')
+        except Exception as exc:
+            app.logger.warning('Media worker retry scheduled (%s)', type(exc).__name__)
             did_work = False
         time.sleep(1 if did_work else 5)
 
@@ -410,7 +414,7 @@ def init_media(app):
         from sqlalchemy import func
         counts = db.session.execute(select(MediaTask.state, func.count()).group_by(MediaTask.state)).all()
         totals = db.session.execute(select(func.sum(MediaAsset.size_bytes), func.sum(MediaAsset.original_bytes)).where(MediaAsset.source_url.like('/media/%'))).first()
-        return jsonify(r2_enabled=r2_enabled(), queue=dict(counts), optimized_bytes=totals[0] or 0, source_bytes=totals[1] or 0)
+        return jsonify(r2_enabled=r2_enabled(), queue=dict(counts), catalog_bytes=totals[0] or 0, catalog_source_bytes=totals[1] or 0)
 
     @app.cli.command('retry-media')
     def retry_media():
