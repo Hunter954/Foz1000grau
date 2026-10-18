@@ -33,6 +33,17 @@ def enable_r2(app, monkeypatch):
     app.config.update(R2_ENDPOINT_URL='https://example.r2.cloudflarestorage.com', R2_ACCESS_KEY_ID='test',R2_SECRET_ACCESS_KEY='test',R2_BUCKET='news',R2_PUBLIC_URL='https://images.example.test')
     client=Mock()
     monkeypatch.setattr(media,'r2_client',lambda:client)
+    def head(*args, **kwargs):
+        response=Mock()
+        response.__enter__=Mock(return_value=response)
+        response.__exit__=Mock(return_value=False)
+        if client.put_object.called:
+            size=len(client.put_object.call_args.kwargs['Body'])
+        else:
+            size=Path(client.upload_file.call_args.args[0]).stat().st_size
+        response.headers={'Content-Length':str(size)}
+        return response
+    monkeypatch.setattr(media.requests,'head',head)
     return client
 
 
@@ -81,23 +92,30 @@ def test_upload_does_not_commit_article_transaction(app):
     assert MediaAsset.query.count()==1
 
 
-def test_r2_background_and_direct_delivery(app, monkeypatch):
+def test_r2_direct_delivery_without_local_copy(app, monkeypatch):
     client=enable_r2(app,monkeypatch)
     url=media.save_upload(photo((400,300)),'cover.jpg')
-    assert url.startswith('/media/') and not client.upload_file.called
-    assert media.run_one()
-    assert client.upload_file.call_count==1
-    final=media.resolve_media(url)
-    assert final.startswith(app.config['R2_PUBLIC_URL'])
-    args=client.upload_file.call_args.kwargs
-    assert 'immutable' in args['ExtraArgs']['CacheControl']
-    response=app.test_client().get(url)
-    assert response.status_code==302 and response.location==final
+    assert url.startswith(app.config['R2_PUBLIC_URL']+'/foz1000grau/')
+    assert client.put_object.call_count==1
+    args=client.put_object.call_args.kwargs
+    assert args['ContentType']=='image/webp'
+    assert 'immutable' in args['CacheControl']
+    assert not media.local_path(args['Key'].removeprefix('foz1000grau/')).exists()
+    assert MediaAsset.query.count()==1
+    assert MediaTask.query.count()==0
     post=Post(title='Cloud',slug='cloud',featured_image=url,published_at=datetime.utcnow())
     db.session.add(post); db.session.commit()
     body=app.test_client().get('/').get_data(as_text=True)
-    assert final in body
-    assert 'src="'+url+'"' not in body
+    assert url in body
+
+
+def test_failed_r2_does_not_write_local_media(app, monkeypatch):
+    client=enable_r2(app,monkeypatch)
+    client.put_object.side_effect=OSError('r2 unavailable')
+    with pytest.raises(OSError, match='r2 unavailable'):
+        media.save_upload(photo((400,300)),'cover.jpg')
+    assert not list(media.root().rglob('*.*'))
+    assert MediaAsset.query.count()==0
 
 
 def test_migrate_preserves_original_and_local_fallback(app):
@@ -259,7 +277,5 @@ def test_webp_mime_without_system_registry(app,monkeypatch):
     monkeypatch.setattr(media.mimetypes,'guess_type',lambda _: (None,None))
     client=enable_r2(app,monkeypatch)
     url=media.save_upload(photo((500,300)),'photo.jpg')
-    response=app.test_client().get(url)
-    assert response.mimetype=='image/webp'
-    media.run_one()
-    assert client.upload_file.call_args.kwargs['ExtraArgs']['ContentType']=='image/webp'
+    assert url.startswith(app.config['R2_PUBLIC_URL'])
+    assert client.put_object.call_args.kwargs['ContentType']=='image/webp'
