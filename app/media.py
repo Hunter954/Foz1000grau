@@ -70,10 +70,10 @@ def _asset(source):
     return db.session.execute(select(MediaAsset).where(MediaAsset.source_key == digest(source))).scalar_one_or_none()
 
 
-def _remember(source, relative, original_bytes=0, public_url=None):
+def _remember(source, relative, original_bytes=0, public_url=None, size_bytes=None):
     # Independent transaction: never commits an unfinished editorial request.
     table = MediaAsset.__table__
-    values = dict(source_key=digest(source), source_url=source, local_path=relative, size_bytes=local_path(relative).stat().st_size, original_bytes=original_bytes, updated_at=datetime.utcnow())
+    values = dict(source_key=digest(source), source_url=source, local_path=relative, size_bytes=size_bytes if size_bytes is not None else local_path(relative).stat().st_size, original_bytes=original_bytes, updated_at=datetime.utcnow())
     if public_url:
         values['public_url'] = public_url
     with db.engine.begin() as conn:
@@ -151,6 +151,20 @@ def save_upload(stream, filename, subdir='general'):
         # Immutable, content-addressed names avoid duplicate storage and cache busts.
         safe_folder = 'images' if ext == '.webp' else (re.sub(r'[^a-zA-Z0-9/_-]', '', subdir).strip('/') or 'general')
         relative = f'{safe_folder}/{content_hash}{ext or ".bin"}'
+        if r2_enabled():
+            key = 'foz1000grau/' + relative
+            r2_client().put_object(Bucket=current_app.config['R2_BUCKET'], Key=key, Body=payload,
+                ContentType=content_type(relative), CacheControl='public, max-age=31536000, immutable')
+            public = current_app.config['R2_PUBLIC_URL'] + '/' + quote(key, safe='/')
+            with requests.head(public, timeout=(4, 10), allow_redirects=True) as response:
+                response.raise_for_status()
+                if int(response.headers.get('Content-Length', -1)) != len(payload):
+                    raise ValueError('public_size_mismatch')
+            _remember('/media/' + relative, relative, original_size, public, size_bytes=len(payload))
+            return public
+
+        if current_app.config.get('R2_BUCKET'):
+            raise RuntimeError('R2 configurado sem credenciais completas; upload local bloqueado')
         destination = local_path(relative)
         destination.parent.mkdir(parents=True, exist_ok=True)
         if not destination.exists():
@@ -160,8 +174,6 @@ def save_upload(stream, filename, subdir='general'):
             os.replace(temp_name, destination)
     url = '/media/' + relative
     _remember(url, relative, original_size)
-    if r2_enabled():
-        enqueue('asset', relative)
     return resolve_media(url)
 
 
@@ -250,17 +262,8 @@ def upload_asset(relative):
     asset = _asset(source)
     if asset and asset.public_url and asset.public_url.startswith('https://'):
         return
-    # Legacy files are compressed without modifying or deleting their originals.
-    if len(path.stem) != 64 and path.suffix.lower() in IMAGE_EXT:
-        with path.open('rb') as fh:
-            optimized_url = save_upload(fh, path.name, 'optimized')
-        db.session.expire_all()
-        optimized = _asset(optimized_url)
-        if not optimized:  # Already-public URL returned on a repeated migration.
-            optimized = db.session.execute(select(MediaAsset).where(MediaAsset.public_url == optimized_url).limit(1)).scalar_one()
-        relative_out = optimized.local_path
-    else:
-        relative_out = relative
+    # Upload the existing file directly; do not create another local derivative.
+    relative_out = relative
     from boto3.s3.transfer import TransferConfig
     key = 'foz1000grau/' + relative_out
     r2_client().upload_file(str(local_path(relative_out)), current_app.config['R2_BUCKET'], key, ExtraArgs={'ContentType': content_type(relative_out), 'CacheControl': 'public, max-age=31536000, immutable'}, Config=TransferConfig(use_threads=False, max_concurrency=1))
