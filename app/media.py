@@ -268,6 +268,10 @@ def upload_asset(relative):
     key = 'foz1000grau/' + relative_out
     r2_client().upload_file(str(local_path(relative_out)), current_app.config['R2_BUCKET'], key, ExtraArgs={'ContentType': content_type(relative_out), 'CacheControl': 'public, max-age=31536000, immutable'}, Config=TransferConfig(use_threads=False, max_concurrency=1))
     public = current_app.config['R2_PUBLIC_URL'] + '/' + quote(key, safe='/')
+    with requests.head(public, timeout=(4, 10), allow_redirects=True) as response:
+        response.raise_for_status()
+        if int(response.headers.get('Content-Length', -1)) != path.stat().st_size:
+            raise ValueError('public_size_mismatch')
     _remember(source, relative, path.stat().st_size, public)
     # Remote-source aliases share the compressed path; resolve them to R2 too.
     with db.engine.begin() as conn:
