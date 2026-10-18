@@ -226,7 +226,7 @@ def remote_image(url, folder='imported'):
     with db.engine.begin() as conn:
         row = conn.execute(select(MediaAsset.__table__).where(MediaAsset.public_url == local_url)).mappings().first()
     if row:
-        _remember(url, row['local_path'], count, local_url)
+        _remember(url, row['local_path'], count, local_url, size_bytes=row['size_bytes'])
     return local_url
 
 
