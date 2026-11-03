@@ -2,8 +2,8 @@ import os
 import threading, time
 from pathlib import Path
 from sqlalchemy import inspect, text
-from flask import Flask
-from flask_login import LoginManager
+from flask import Flask, session, request
+from flask_login import LoginManager, current_user, logout_user
 from dotenv import load_dotenv
 
 from .config import Config
@@ -33,6 +33,15 @@ def _ensure_schema_updates():
             user_statements.append('ALTER TABLE "user" ADD COLUMN created_at TIMESTAMP')
         if "updated_at" not in user_columns:
             user_statements.append('ALTER TABLE "user" ADD COLUMN updated_at TIMESTAMP')
+        for column, definition in (
+            ("whatsapp", "VARCHAR(16)"),
+            ("reset_hash", "VARCHAR(64)"),
+            ("reset_expires", "TIMESTAMP"),
+            ("reset_requested", "TIMESTAMP"),
+            ("reset_attempts", "INTEGER NOT NULL DEFAULT 0"),
+        ):
+            if column not in user_columns:
+                user_statements.append(f'ALTER TABLE "user" ADD COLUMN {column} {definition}')
         if user_statements:
             with db.engine.begin() as conn:
                 for stmt in user_statements:
@@ -138,6 +147,15 @@ def create_app():
     from .media import init_media
     db.init_app(app)
     login_manager.init_app(app)
+
+    @app.before_request
+    def check_admin_session():
+        if current_user.is_authenticated:
+            expected = current_user.password_hash
+            if not current_user.is_active or session.get("admin_password_stamp") != expected:
+                logout_user()
+                session.pop("admin_password_stamp", None)
+
 
     app.register_blueprint(site_bp)
     app.register_blueprint(admin_bp)
