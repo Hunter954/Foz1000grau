@@ -7,7 +7,7 @@ import secrets
 from datetime import datetime, timedelta
 
 import requests
-from flask import current_app, flash, redirect, render_template, request, session, url_for
+from flask import current_app, flash, redirect, render_template, session, url_for
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField
 from wtforms.validators import DataRequired, Email, Length, EqualTo

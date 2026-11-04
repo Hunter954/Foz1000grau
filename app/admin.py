@@ -1,4 +1,6 @@
 import os
+import hmac
+import hashlib
 import re
 import shutil
 import json
@@ -928,8 +930,12 @@ def login_post():
             if not getattr(user, 'is_active', True):
                 flash('Este usuário está desativado. Fale com o administrador.', 'danger')
                 return render_template("admin/login.html", form=form)
+            owner_email = (os.getenv("ADMIN_EMAIL") or "admin@admin.com").strip().lower()
+            if not user.whatsapp and user.email != owner_email:
+                flash('Peça ao administrador para cadastrar seu WhatsApp antes de entrar.', 'danger')
+                return render_template("admin/login.html", form=form)
             login_user(user)
-            session["admin_password_stamp"] = user.password_hash
+            session["admin_password_stamp"] = hmac.new(current_app.secret_key.encode(), user.password_hash.encode(), hashlib.sha256).hexdigest()
             return redirect(url_for("admin.dashboard"))
         flash("Email ou senha inválidos.", "danger")
     return render_template("admin/login.html", form=form)

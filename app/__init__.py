@@ -1,4 +1,6 @@
 import os
+import hmac
+import hashlib
 import threading, time
 from pathlib import Path
 from sqlalchemy import inspect, text
@@ -151,7 +153,7 @@ def create_app():
     @app.before_request
     def check_admin_session():
         if current_user.is_authenticated:
-            expected = current_user.password_hash
+            expected = hmac.new(app.secret_key.encode(), current_user.password_hash.encode(), hashlib.sha256).hexdigest()
             if not current_user.is_active or session.get("admin_password_stamp") != expected:
                 logout_user()
                 session.pop("admin_password_stamp", None)
