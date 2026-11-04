@@ -930,7 +930,7 @@ def login_post():
             if not getattr(user, 'is_active', True):
                 flash('Este usuário está desativado. Fale com o administrador.', 'danger')
                 return render_template("admin/login.html", form=form)
-            owner_email = (os.getenv("ADMIN_EMAIL") or "admin@admin.com").strip().lower()
+            owner_email = (os.getenv("ADMIN_EMAIL") or "").strip().lower()
             if not user.whatsapp and user.email != owner_email:
                 flash('Peça ao administrador para cadastrar seu WhatsApp antes de entrar.', 'danger')
                 return render_template("admin/login.html", form=form)

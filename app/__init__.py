@@ -170,21 +170,22 @@ def create_app():
         _ensure_schema_updates()
         _ensure_defaults()
 
-        admin_email = "admin@admin.com"
-        admin_password = "senha123"
+        admin_email = (os.getenv("ADMIN_EMAIL") or "").strip().lower()
+        admin_password = os.getenv("ADMIN_PASSWORD") or ""
 
-        u = User.query.filter_by(email=admin_email).first()
-        if not u:
-            u = User(email=admin_email, is_admin=True, is_active=True)
-            u.set_password(admin_password)
-            db.session.add(u)
-        else:
-            u.is_admin = True
-            u.is_active = True
-            if not u.password_hash:
+        if admin_email and admin_password:
+            u = User.query.filter_by(email=admin_email).first()
+            if not u:
+                u = User(email=admin_email, is_admin=True, is_active=True)
                 u.set_password(admin_password)
-        db.session.commit()
-        print("ADMIN OK:", admin_email)
+                db.session.add(u)
+            else:
+                u.is_admin = True
+                u.is_active = True
+                if not u.password_hash:
+                    u.set_password(admin_password)
+            db.session.commit()
+            print("ADMIN OK:", admin_email)
 
     init_media(app)
 
